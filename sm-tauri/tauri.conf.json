@@ -4,7 +4,7 @@
   "identifier": "com.fundacao.sm",
   "build": {
     "frontendDist": ".",
-    "devUrl": "http://localhost:1420",
+    "devUrl": null,
     "beforeDevCommand": "",
     "beforeBuildCommand": ""
   },
