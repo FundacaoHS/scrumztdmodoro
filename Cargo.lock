@@ -785,6 +785,7 @@ dependencies = [
  "chrono",
  "fundacao",
  "serde",
+ "thiserror",
 ]
 
 [[package]]

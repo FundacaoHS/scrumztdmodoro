@@ -49,3 +49,12 @@ updated: 2026-06-25
 - [x] Adicionar `AddStatus` (Created / AlreadyExists / NoChange)
 - [x] Atualizar testes para o novo comportamento
 - [x] Adicionar variante `Column(Vec<String>)`, `Todo(TodoConfig)`, `Project(ProjectConfig)`
+
+## Feature: Task - Bullet Journal
+- [x] Adicionar enum `BulletKind` (Task, Done, Migrated, Scheduled, Event, Note, Priority)
+- [x] Adicionar campo `bullet` na struct `Task`
+- [x] Implementar parser de bullet de/para markdown
+- [x] Implementar `TaskList::from_md(text)` — ler tasks do .md
+- [x] Implementar `TaskList::to_md(&self)` — escrever tasks como .md
+- [x] Conectar com `fundacao::Vault` para ler/escrever `today_todo()`
+- [x] Escrever testes

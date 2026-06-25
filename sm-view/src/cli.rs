@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use sm_core::TaskList;
+use sm_core::{BulletKind, TaskList};
 
 #[derive(Parser)]
 #[command(name = "sm", about = "Smart Task Manager")]
@@ -49,14 +49,17 @@ pub fn handle_command(command: Command, tasks: &mut TaskList) {
                 .filter(|s| !s.is_empty())
                 .collect();
             let t = tasks.add_task(task, tag_list);
-            println!("✓ Task #{} added: {}", t.id, t.description);
+            println!("{} {} added: {}", t.bullet.symbol(), t.id, t.description);
         }
         Command::Remove { id } => match tasks.remove_task(id) {
             Some(t) => println!("✓ Task #{} removed: {}", t.id, t.description),
             None => eprintln!("✗ Task #{} not found", id),
         },
         Command::Toggle { id } => match tasks.toggle_task(id) {
-            Some(t) => println!("✓ Task #{} {} set to {}", t.id, t.description, if t.done { "done" } else { "undone" }),
+            Some(t) => {
+                let status = if t.bullet == BulletKind::Done { "done" } else { "undone" };
+                println!("✓ Task #{} set to {}", t.id, status);
+            }
             None => eprintln!("✗ Task #{} not found", id),
         },
         Command::List => {
@@ -65,13 +68,12 @@ pub fn handle_command(command: Command, tasks: &mut TaskList) {
                 return;
             }
             for task in tasks.list_tasks() {
-                let status = if task.done { "[x]" } else { "[ ]" };
                 let tags = if task.tags.is_empty() {
                     String::new()
                 } else {
                     format!(" #{}", task.tags.join(" #"))
                 };
-                println!("{} {} - {}{}", status, task.id, task.description, tags);
+                println!("{} {} - {}{}", task.bullet.symbol(), task.id, task.description, tags);
             }
         }
     }
