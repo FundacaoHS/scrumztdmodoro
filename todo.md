@@ -75,3 +75,12 @@ updated: 2026-06-25
 - [x] Criar `tauri.conf.json` + `capabilities/default.json`
 - [x] Criar `index.html` com frontend básico JS
 - [x] Compilar com sucesso
+
+## Feature: Neovim Plugin
+- [ ] Plugin Lua que invoca `sm` CLI para integrar Bullet Journal + Pomodoro no Neovim
+- [ ] Comando `:SMTasks` — lista tasks do dia num buffer
+- [ ] Comando `:SMAdd "desc" #tag` — adiciona task
+- [ ] Comando `:SMToggle` / `:SMDelete` sob cursor
+- [ ] Comando `:SMPomo start|stop|status` — timer Pomodoro no statusline
+- [ ] Highlight de bullets (cores diferentes por tipo)
+- [ ] Atualização automática ao salvar buffer
