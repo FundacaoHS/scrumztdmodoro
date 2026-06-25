@@ -47,10 +47,9 @@ fn main() {
             }
         }
         None => {
-            if let Err(e) = tui::run(&mut tasks) {
+            if let Err(e) = tui::run(&mut tasks, &vault) {
                 eprintln!("TUI error: {}", e);
             }
-            tasks.save_to_vault(&vault).ok();
         }
     }
 }

@@ -10,6 +10,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
     Frame, Terminal,
 };
+use fundacao::Vault;
 use sm_core::{BulletKind, TaskList};
 use std::io::stdout;
 
@@ -20,7 +21,7 @@ enum InputMode {
     Adding { input: String, cursor: usize },
 }
 
-pub fn run(tasks: &mut TaskList) -> std::io::Result<()> {
+pub fn run(tasks: &mut TaskList, vault: &Vault) -> std::io::Result<()> {
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
     let mut terminal = Terminal::new(ratatui::backend::CrosstermBackend::new(stdout()))?;
@@ -72,6 +73,7 @@ pub fn run(tasks: &mut TaskList) -> std::io::Result<()> {
                         if let Some(i) = list_state.selected() {
                             if let Some(task) = tasks.list_tasks().get(i) {
                                 tasks.remove_task(task.id);
+                                tasks.save_to_vault(vault).ok();
                                 let len = tasks.list_tasks().len();
                                 if i >= len {
                                     list_state.select(Some(len.saturating_sub(1)));
@@ -84,6 +86,7 @@ pub fn run(tasks: &mut TaskList) -> std::io::Result<()> {
                         if let Some(i) = list_state.selected() {
                             if let Some(task) = tasks.list_tasks().get(i) {
                                 tasks.toggle_task(task.id);
+                                tasks.save_to_vault(vault).ok();
                             }
                         }
                         mode = InputMode::Browsing;
@@ -98,22 +101,27 @@ pub fn run(tasks: &mut TaskList) -> std::io::Result<()> {
                     KeyCode::Esc => mode = InputMode::WhichKey,
                     KeyCode::Char('m') => {
                         set_bullet(tasks, &list_state, BulletKind::Migrated);
+                        tasks.save_to_vault(vault).ok();
                         mode = InputMode::Browsing;
                     }
                     KeyCode::Char('s') => {
                         set_bullet(tasks, &list_state, BulletKind::Scheduled);
+                        tasks.save_to_vault(vault).ok();
                         mode = InputMode::Browsing;
                     }
                     KeyCode::Char('e') => {
                         set_bullet(tasks, &list_state, BulletKind::Event);
+                        tasks.save_to_vault(vault).ok();
                         mode = InputMode::Browsing;
                     }
                     KeyCode::Char('n') => {
                         set_bullet(tasks, &list_state, BulletKind::Note);
+                        tasks.save_to_vault(vault).ok();
                         mode = InputMode::Browsing;
                     }
                     KeyCode::Char('p') => {
                         set_bullet(tasks, &list_state, BulletKind::Priority);
+                        tasks.save_to_vault(vault).ok();
                         mode = InputMode::Browsing;
                     }
                     _ => {}
@@ -126,6 +134,7 @@ pub fn run(tasks: &mut TaskList) -> std::io::Result<()> {
                         if !input.is_empty() {
                             let (desc, tags) = parse_input(input);
                             tasks.add_task(desc, tags);
+                            tasks.save_to_vault(vault).ok();
                             list_state.select(Some(tasks.list_tasks().len().saturating_sub(1)));
                         }
                         mode = InputMode::Browsing;
