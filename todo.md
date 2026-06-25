@@ -66,3 +66,12 @@ updated: 2026-06-25
 - [x] Implementar comandos CLI (`sm pomo start/status/stop/config`)
 - [x] Integrar timer view na TUI
 - [x] Escrever testes
+
+## Feature: sm-tauri — GUI Desktop
+- [x] Criar crate `sm-tauri` como workspace member
+- [x] Adicionar dependências: `tauri`, `sm-core`, `fundacao`
+- [x] Implementar Tauri commands CRUD (list, add, remove, toggle, set_bullet)
+- [x] Implementar comandos Pomodoro (start, stop, status)
+- [x] Criar `tauri.conf.json` + `capabilities/default.json`
+- [x] Criar `index.html` com frontend básico JS
+- [x] Compilar com sucesso

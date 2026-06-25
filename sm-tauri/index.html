@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SM Task Manager</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+    .container { max-width: 700px; margin: 0 auto; }
+    h1 { margin-bottom: 16px; color: #e94560; font-size: 1.5rem; }
+    .add-form { display: flex; gap: 8px; margin-bottom: 16px; }
+    .add-form input { flex: 1; padding: 8px 12px; border: 1px solid #333; border-radius: 6px; background: #16213e; color: #eee; }
+    .add-form button { padding: 8px 16px; background: #e94560; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+    .add-form button:hover { background: #c73655; }
+    .task-list { list-style: none; }
+    .task-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #333; }
+    .task-item .bullet { width: 20px; text-align: center; cursor: pointer; font-size: 1.1rem; }
+    .task-item .desc { flex: 1; }
+    .task-item .desc.done { text-decoration: line-through; color: #666; }
+    .task-item .tags { color: #888; font-size: 0.85rem; }
+    .task-item .del { cursor: pointer; color: #e94560; font-size: 1.2rem; }
+    .bullet-select { margin-left: 8px; padding: 2px 4px; border-radius: 4px; background: #16213e; color: #eee; border: 1px solid #444; font-size: 0.8rem; }
+    .pomo { display: flex; gap: 8px; align-items: center; margin-top: 20px; padding: 12px; background: #16213e; border-radius: 8px; }
+    .pomo button { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; }
+    .pomo .start { background: #0f3460; color: #eee; }
+    .pomo .stop { background: #e94560; color: #fff; }
+    .pomo .status { color: #aaa; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📋 SM Tasks</h1>
+    <div class="add-form">
+      <input id="taskInput" placeholder="Task description  #tag1 #tag2" />
+      <button onclick="addTask()">Add</button>
+    </div>
+    <ul class="task-list" id="taskList"></ul>
+    <div class="pomo" id="pomoStatus">Pomodoro: idle</div>
+    <div class="pomo">
+      <button class="start" onclick="pomoStart()">▶ Start Focus</button>
+      <button class="stop" onclick="pomoStop()">⏹ Stop</button>
+      <span class="status" id="pomoTimer"></span>
+    </div>
+  </div>
+  <script>
+    const { invoke } = window.__TAURI__?.core || {};
+
+    async function loadTasks() {
+      if (!invoke) return;
+      const tasks = await invoke('list_tasks');
+      const list = document.getElementById('taskList');
+      list.innerHTML = tasks.map(t => {
+        const isDone = t.bullet === 'Done';
+        const symbol = { Task: '•', Done: 'x', Migrated: '>', Scheduled: '<', Event: 'o', Note: '-', Priority: '*' }[t.bullet] || '•';
+        const tags = t.tags?.length ? ' #' + t.tags.join(' #') : '';
+        return `<li class="task-item">
+          <span class="bullet" onclick="toggleTask(${t.id})">${symbol}</span>
+          <span class="desc${isDone ? ' done' : ''}">${t.description}${tags ? `<span class="tags"> ${tags}</span>` : ''}</span>
+          <select class="bullet-select" onchange="setBullet(${t.id}, this.value)">
+            <option value="task" ${t.bullet === 'Task' ? 'selected' : ''}>• Task</option>
+            <option value="done" ${t.bullet === 'Done' ? 'selected' : ''}>x Done</option>
+            <option value="migrated" ${t.bullet === 'Migrated' ? 'selected' : ''}>> Migrated</option>
+            <option value="scheduled" ${t.bullet === 'Scheduled' ? 'selected' : ''}>< Scheduled</option>
+            <option value="event" ${t.bullet === 'Event' ? 'selected' : ''}>o Event</option>
+            <option value="note" ${t.bullet === 'Note' ? 'selected' : ''}>- Note</option>
+            <option value="priority" ${t.bullet === 'Priority' ? 'selected' : ''}>* Priority</option>
+          </select>
+          <span class="del" onclick="removeTask(${t.id})">✕</span>
+        </li>`;
+      }).join('');
+    }
+
+    async function addTask() {
+      const input = document.getElementById('taskInput');
+      const text = input.value.trim();
+      if (!text || !invoke) return;
+      const parts = text.split(/\s+/);
+      const desc = parts.filter(w => !w.startsWith('#')).join(' ');
+      const tags = parts.filter(w => w.startsWith('#')).map(w => w.slice(1));
+      await invoke('add_task', { description: desc, tags });
+      input.value = '';
+      loadTasks();
+    }
+
+    async function toggleTask(id) {
+      if (!invoke) return;
+      await invoke('toggle_task', { id });
+      loadTasks();
+    }
+
+    async function removeTask(id) {
+      if (!invoke) return;
+      await invoke('remove_task', { id });
+      loadTasks();
+    }
+
+    async function setBullet(id, type) {
+      if (!invoke) return;
+      await invoke('set_bullet', { id, bullet: type });
+      loadTasks();
+    }
+
+    async function pomoStart() {
+      if (!invoke) return;
+      await invoke('pomo_start');
+      updatePomo();
+    }
+
+    async function pomoStop() {
+      if (!invoke) return;
+      await invoke('pomo_stop');
+      updatePomo();
+    }
+
+    async function updatePomo() {
+      if (!invoke) return;
+      const status = await invoke('pomo_status');
+      const el = document.getElementById('pomoTimer');
+      if (status === 'idle') {
+        el.textContent = 'No active session';
+      } else {
+        const [state, secs] = status.split(':');
+        const mins = Math.floor(Number(secs) / 60);
+        const s = Number(secs) % 60;
+        el.textContent = `${state} — ${String(mins).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      }
+    }
+
+    document.getElementById('taskInput').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+    if (invoke) { loadTasks(); updatePomo(); setInterval(updatePomo, 1000); }
+  </script>
+</body>
+</html>
