@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use fundacao::{Config, ConfigKey, VaultConfig};
+use fundacao::{Config, ConfigKey, ProjectConfig, TodoConfig, VaultConfig};
 
 #[test]
 fn test_add_creates_vault_and_returns_config() {
@@ -51,14 +51,34 @@ fn test_vault_config_builder() {
 }
 
 #[test]
-fn test_add_columns() {
+fn test_add_column() {
     let mut cfg = Config::default();
     let cols = vec!["a".into(), "b".into(), "c".into()];
 
-    let result = cfg.add(ConfigKey::Columns(cols.clone())).unwrap();
+    let result = cfg.add(ConfigKey::Column(cols.clone())).unwrap();
 
     assert_eq!(result.scrum_columns, cols);
     assert_eq!(result.scrum_columns.len(), 3);
+}
+
+#[test]
+fn test_add_project() {
+    let mut cfg = Config::default();
+    let result = cfg
+        .add(ConfigKey::Project(ProjectConfig::new().name("meuproj")))
+        .unwrap();
+
+    assert_eq!(result.project_name, "meuproj");
+}
+
+#[test]
+fn test_add_todo() {
+    let mut cfg = Config::default();
+    let result = cfg
+        .add(ConfigKey::Todo(TodoConfig::new().file_name("tasks")))
+        .unwrap();
+
+    assert_eq!(result.project_name, "sm");
 }
 
 #[test]

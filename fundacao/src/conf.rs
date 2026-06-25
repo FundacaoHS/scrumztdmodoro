@@ -66,8 +66,17 @@ impl Config {
                 }
                 Ok(self)
             }
-            ConfigKey::Columns(columns) => {
+            ConfigKey::Column(columns) => {
                 self.scrum_columns = columns;
+                Ok(self)
+            }
+            ConfigKey::Todo(_cfg) => {
+                Ok(self)
+            }
+            ConfigKey::Project(cfg) => {
+                if let Some(name) = cfg.name {
+                    self.project_name = name;
+                }
                 Ok(self)
             }
         }
@@ -85,7 +94,11 @@ pub enum ConfigKey {
     /// Configuracoes do vault (diretorio de arquivos .md)
     Vault(VaultConfig),
     /// Colunas do scrum board
-    Columns(Vec<String>),
+    Column(Vec<String>),
+    /// Configuracoes de todo
+    Todo(TodoConfig),
+    /// Configuracoes do projeto
+    Project(ProjectConfig),
 }
 
 /// Configuracoes do vault
@@ -102,6 +115,40 @@ impl VaultConfig {
 
     pub fn path(mut self, path: impl Into<PathBuf>) -> Self {
         self.path = Some(path.into());
+        self
+    }
+}
+
+/// Configuracoes de todo (scaffold)
+#[derive(Debug, Clone, Default)]
+pub struct TodoConfig {
+    pub file_name: Option<String>,
+}
+
+impl TodoConfig {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn file_name(mut self, name: impl Into<String>) -> Self {
+        self.file_name = Some(name.into());
+        self
+    }
+}
+
+/// Configuracoes do projeto
+#[derive(Debug, Clone, Default)]
+pub struct ProjectConfig {
+    pub name: Option<String>,
+}
+
+impl ProjectConfig {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
         self
     }
 }
@@ -235,12 +282,34 @@ mod tests {
     }
 
     #[test]
-    fn test_add_columns_updates_scrum_columns() {
+    fn test_add_column_updates_scrum_columns() {
         let mut cfg = Config::default();
         let cols = vec!["backlog".into(), "todo".into(), "testing".into()];
 
-        let result = cfg.add(ConfigKey::Columns(cols.clone())).unwrap();
+        let result = cfg.add(ConfigKey::Column(cols.clone())).unwrap();
 
         assert_eq!(result.scrum_columns, cols);
+    }
+
+    #[test]
+    fn test_add_project_updates_name() {
+        let mut cfg = Config::default();
+
+        let result = cfg
+            .add(ConfigKey::Project(ProjectConfig::new().name("meu-proj")))
+            .unwrap();
+
+        assert_eq!(result.project_name, "meu-proj");
+    }
+
+    #[test]
+    fn test_add_todo_returns_config() {
+        let mut cfg = Config::default();
+
+        let result = cfg
+            .add(ConfigKey::Todo(TodoConfig::new().file_name("tarefas")))
+            .unwrap();
+
+        assert_eq!(result.project_name, "sm");
     }
 }
