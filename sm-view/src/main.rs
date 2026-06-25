@@ -5,7 +5,7 @@ use clap::Parser;
 use fundacao::{Config, Vault};
 use sm_core::TaskList;
 
-fn init() -> (TaskList, Vault) {
+fn init() -> (TaskList, Vault, Config) {
     let conf_path = fundacao::default_conf_path();
     let mut cfg = match Config::load(&conf_path) {
         Ok(c) => c,
@@ -16,13 +16,13 @@ fn init() -> (TaskList, Vault) {
     }
     let vault = Vault::new(&cfg.vault);
     let tasks = TaskList::load_from_vault(&vault).unwrap_or_default();
-    (tasks, vault)
+    (tasks, vault, cfg)
 }
 
 fn main() {
     let cli = cli::Cli::parse();
 
-    let (mut tasks, vault) = init();
+    let (mut tasks, vault, cfg) = init();
 
     if cli.tauri {
         #[cfg(feature = "tauri")]
@@ -47,7 +47,7 @@ fn main() {
             }
         }
         None => {
-            if let Err(e) = tui::run(&mut tasks, &vault) {
+            if let Err(e) = tui::run(&mut tasks, &vault, &cfg.project_name) {
                 eprintln!("TUI error: {}", e);
             }
         }

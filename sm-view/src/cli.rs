@@ -38,6 +38,15 @@ pub enum Command {
     #[command(about = "List all tasks")]
     List,
 
+    #[command(about = "Set task bullet type (ex: done, migrated, scheduled, event, note, priority)")]
+    Bullet {
+        #[arg(long)]
+        id: u64,
+
+        #[arg(long, help = "Bullet type: task, done, migrated, scheduled, event, note, priority")]
+        r#type: String,
+    },
+
     #[command(about = "Pomodoro timer commands", subcommand)]
     Pomo(PomoCommand),
 }
@@ -101,7 +110,33 @@ pub fn handle_command(command: Command, tasks: &mut TaskList) {
                 println!("{} {} - {}{}", task.bullet.symbol(), task.id, task.description, tags);
             }
         }
+        Command::Bullet { id, r#type } => {
+            let bullet = match parse_bullet_type(&r#type) {
+                Some(b) => b,
+                None => {
+                    eprintln!("✗ Invalid bullet type '{}'. Options: task, done, migrated, scheduled, event, note, priority", r#type);
+                    return;
+                }
+            };
+            match tasks.set_bullet(id, bullet) {
+                Some(t) => println!("✓ Task #{} bullet set to {} ({})", t.id, t.bullet.symbol(), r#type),
+                None => eprintln!("✗ Task #{} not found", id),
+            }
+        }
         Command::Pomo(_) => unreachable!(),
+    }
+}
+
+fn parse_bullet_type(s: &str) -> Option<BulletKind> {
+    match s {
+        "task" | "•" => Some(BulletKind::Task),
+        "done" | "x" => Some(BulletKind::Done),
+        "migrated" | ">" => Some(BulletKind::Migrated),
+        "scheduled" | "<" => Some(BulletKind::Scheduled),
+        "event" | "o" => Some(BulletKind::Event),
+        "note" | "-" => Some(BulletKind::Note),
+        "priority" | "*" => Some(BulletKind::Priority),
+        _ => None,
     }
 }
 
