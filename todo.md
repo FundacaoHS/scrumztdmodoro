@@ -40,8 +40,8 @@ updated: 2026-06-25
 - [x] Sair (q)
 
 ## Feature: Config - Add & Exists
-- [ ] Adicionar enum `ConfigKey` com variante `Vault`
-- [ ] Adicionar struct `VaultConfig` (scaffold)
-- [ ] Implementar `Config::add(key, valor)`
-- [ ] Implementar `Config::exists()` (privado)
-- [ ] Escrever testes
+- [x] Adicionar enum `ConfigKey` com variante `Vault`
+- [x] Adicionar struct `VaultConfig` (scaffold)
+- [x] Implementar `Config::add(key, valor)`
+- [x] Implementar `Config::exists()` (privado)
+- [x] Escrever testes
