@@ -53,3 +53,9 @@ updated: 2026-06-25
 - [x] Adicionar variante `Columns(Vec<String>)` no enum `ConfigKey`
 - [x] Implementar `add(ConfigKey::Columns(...))` que atualiza `scrum_columns`
 - [x] Escrever testes
+
+## Feature: ConfigKey - Column, Todo, Project
+- [x] Renomear `Columns` para `Column`
+- [x] Adicionar `Todo(TodoConfig)` e `Project(ProjectConfig)`
+- [x] Implementar `add()` para todos os tipos
+- [x] Escrever testes
