@@ -1,0 +1,11 @@
+[package]
+name = "fundacao"
+version = "0.1.0"
+edition = "2024"
+description = "Shared foundation library for config, vault paths, and project scaffolding"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+directories = "6"
+thiserror = "2"

@@ -1,0 +1,3 @@
+[workspace]
+members = ["fundacao", "sm-core", "sm-view"]
+resolver = "2"

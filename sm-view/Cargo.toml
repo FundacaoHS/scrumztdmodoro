@@ -1,0 +1,17 @@
+[package]
+name = "sm"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "sm"
+path = "src/main.rs"
+
+[features]
+tauri = []
+
+[dependencies]
+sm-core = { path = "../sm-core" }
+clap = { version = "4", features = ["derive"] }
+ratatui = "0.29"
+crossterm = "0.28"
