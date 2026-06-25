@@ -10,6 +10,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
     Frame, Terminal,
 };
+use chrono::Local;
 use fundacao::Vault;
 use sm_core::{BulletKind, TaskList};
 use std::io::stdout;
@@ -21,7 +22,7 @@ enum InputMode {
     Adding { input: String, cursor: usize },
 }
 
-pub fn run(tasks: &mut TaskList, vault: &Vault) -> std::io::Result<()> {
+pub fn run(tasks: &mut TaskList, vault: &Vault, project_name: &str) -> std::io::Result<()> {
     enable_raw_mode()?;
     stdout().execute(EnterAlternateScreen)?;
     let mut terminal = Terminal::new(ratatui::backend::CrosstermBackend::new(stdout()))?;
@@ -36,7 +37,7 @@ pub fn run(tasks: &mut TaskList, vault: &Vault) -> std::io::Result<()> {
     let mut mode = InputMode::Browsing;
 
     loop {
-        terminal.draw(|f| draw(f, tasks, &mut list_state, &mode))?;
+        terminal.draw(|f| draw(f, tasks, &mut list_state, &mode, project_name))?;
 
         if let Event::Key(key) = event::read()? {
             if key.kind != KeyEventKind::Press {
@@ -214,7 +215,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     Rect::new(x, y, popup_x, popup_y)
 }
 
-fn draw(f: &mut Frame, tasks: &TaskList, list_state: &mut ListState, mode: &InputMode) {
+fn draw(f: &mut Frame, tasks: &TaskList, list_state: &mut ListState, mode: &InputMode, project_name: &str) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(3), Constraint::Length(3)])
@@ -244,8 +245,10 @@ fn draw(f: &mut Frame, tasks: &TaskList, list_state: &mut ListState, mode: &Inpu
         })
         .collect();
 
+    let date = Local::now().format("%Y-%m-%d").to_string();
+    let title = format!(" {} | {} | {} ", project_name, date, tasks.list_tasks().len());
     let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title(" Tasks "))
+        .block(Block::default().borders(Borders::ALL).title(title))
         .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
         .highlight_symbol("> ");
 

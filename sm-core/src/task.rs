@@ -96,6 +96,12 @@ impl TaskList {
         Some(task)
     }
 
+    pub fn set_bullet(&mut self, id: u64, bullet: BulletKind) -> Option<&Task> {
+        let task = self.tasks.iter_mut().find(|t| t.id == id)?;
+        task.bullet = bullet;
+        Some(task)
+    }
+
     pub fn list_tasks(&self) -> &[Task] {
         &self.tasks
     }
