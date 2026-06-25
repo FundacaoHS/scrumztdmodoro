@@ -58,3 +58,11 @@ updated: 2026-06-25
 - [x] Implementar `TaskList::to_md(&self)` — escrever tasks como .md
 - [x] Conectar com `fundacao::Vault` para ler/escrever `today_todo()`
 - [x] Escrever testes
+
+## Feature: Pomodoro Timer
+- [x] Criar struct `SessionState` (Idle, Focusing, ShortBreak, LongBreak)
+- [x] Criar struct `Pomodoro` com config (focus, short, long, cycles) + estado + timer
+- [x] Implementar persistência de sessão ativa e histórico no vault
+- [x] Implementar comandos CLI (`sm pomo start/status/stop/config`)
+- [x] Integrar timer view na TUI
+- [x] Escrever testes

@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
-use sm_core::{BulletKind, TaskList};
+use fundacao::Vault;
+use sm_core::{BulletKind, Pomodoro, TaskList};
 
 #[derive(Parser)]
 #[command(name = "sm", about = "Smart Task Manager")]
@@ -36,6 +37,30 @@ pub enum Command {
 
     #[command(about = "List all tasks")]
     List,
+
+    #[command(about = "Pomodoro timer commands", subcommand)]
+    Pomo(PomoCommand),
+}
+
+#[derive(Subcommand)]
+pub enum PomoCommand {
+    #[command(about = "Start a focus session")]
+    Start,
+    #[command(about = "Show current session status")]
+    Status,
+    #[command(about = "Stop current session")]
+    Stop,
+    #[command(about = "Skip to next phase")]
+    Skip,
+    #[command(about = "Show or set timer config")]
+    Config {
+        #[arg(long, help = "Focus duration in minutes")]
+        focus: Option<u64>,
+        #[arg(long, help = "Short break duration in minutes")]
+        short: Option<u64>,
+        #[arg(long, help = "Long break duration in minutes")]
+        long: Option<u64>,
+    },
 }
 
 pub fn handle_command(command: Command, tasks: &mut TaskList) {
@@ -76,5 +101,80 @@ pub fn handle_command(command: Command, tasks: &mut TaskList) {
                 println!("{} {} - {}{}", task.bullet.symbol(), task.id, task.description, tags);
             }
         }
+        Command::Pomo(_) => unreachable!(),
     }
+}
+
+pub fn handle_pomo(cmd: PomoCommand, vault: &Vault) -> Result<(), Box<dyn std::error::Error>> {
+    let mut pomo = Pomodoro::load(vault)?;
+
+    match cmd {
+        PomoCommand::Start => {
+            if pomo.is_active() {
+                println!("Timer is already running. Stop it first or use 'skip'.");
+                return Ok(());
+            }
+            pomo.start_focus();
+            pomo.save(vault)?;
+            println!("▶ Focus session started ({} min)", pomo.config.focus_duration);
+        }
+        PomoCommand::Status => {
+            if !pomo.is_active() {
+                println!("⏸ No active session. Use 'sm pomo start' to begin.");
+                return Ok(());
+            }
+            let state = match pomo.state {
+                sm_core::SessionState::Focusing { .. } => "Focusing",
+                sm_core::SessionState::ShortBreak { .. } => "Short Break",
+                sm_core::SessionState::LongBreak { .. } => "Long Break",
+                _ => "Idle",
+            };
+            let remaining = pomo.remaining_seconds();
+            let mins = remaining / 60;
+            let secs = remaining % 60;
+            println!("{} — {:02}:{:02} remaining", state, mins, secs);
+        }
+        PomoCommand::Stop => {
+            if !pomo.is_active() {
+                println!("No active session.");
+                return Ok(());
+            }
+            pomo.stop();
+            pomo.save(vault)?;
+            println!("⏹ Session stopped.");
+        }
+        PomoCommand::Skip => {
+            pomo.skip();
+            pomo.save(vault)?;
+            let state = match pomo.state {
+                sm_core::SessionState::Focusing { .. } => "Focusing",
+                sm_core::SessionState::ShortBreak { .. } => "Short Break",
+                sm_core::SessionState::LongBreak { .. } => "Long Break",
+                _ => "Idle",
+            };
+            println!("⏭ Skipped to {}", state);
+        }
+        PomoCommand::Config { focus, short, long } => {
+            let changed = focus.is_some() || short.is_some() || long.is_some();
+            if let Some(v) = focus {
+                pomo.config.focus_duration = v;
+            }
+            if let Some(v) = short {
+                pomo.config.short_break = v;
+            }
+            if let Some(v) = long {
+                pomo.config.long_break = v;
+            }
+            if changed {
+                pomo.save(vault)?;
+            }
+            println!("Pomodoro config:");
+            println!("  Focus:      {} min", pomo.config.focus_duration);
+            println!("  Short break: {} min", pomo.config.short_break);
+            println!("  Long break:  {} min", pomo.config.long_break);
+            println!("  Cycles:      {}", pomo.config.cycles_before_long);
+        }
+    }
+
+    Ok(())
 }
