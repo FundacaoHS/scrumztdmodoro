@@ -1,3 +1,4 @@
+use chrono::Local;
 use std::path::{Path, PathBuf};
 
 pub struct Vault {
@@ -20,12 +21,18 @@ impl Vault {
         self.root.join(filename)
     }
 
+    /// Arquivo todo do dia (ex: 2026-06-25.md)
+    pub fn today_todo(&self) -> PathBuf {
+        let date = Local::now().format("%Y-%m-%d").to_string();
+        self.task_file(&date)
+    }
+
     /// Caminho para o diretorio de tasks concluidas (opcional)
     pub fn done_dir(&self) -> PathBuf {
         self.root.join("done")
     }
 
-    /// Caminho para o arquivo de coluna scrum (ex: todo.md, doing.md)
+    /// Caminho para o arquivo de coluna scrum (ex: doing.md)
     pub fn column_file(&self, column: &str) -> PathBuf {
         let filename = format!("{}.md", column);
         self.root.join(filename)

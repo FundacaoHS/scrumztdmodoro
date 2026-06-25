@@ -307,7 +307,7 @@ mod tests {
         let mut cfg = Config::default();
 
         let result = cfg
-            .add(ConfigKey::Todo(TodoConfig::new().file_name("tarefas")))
+            .add(ConfigKey::Todo(TodoConfig::new().file_name("tasks.md")))
             .unwrap();
 
         assert_eq!(result.project_name, "sm");

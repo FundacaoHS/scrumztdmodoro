@@ -1,0 +1,8 @@
+vault: ./vault_x
+scrum_columns:
+- backlog
+- todo
+- doing
+- testing
+- done
+project_name: proj-a
