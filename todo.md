@@ -50,6 +50,6 @@ updated: 2026-06-25
 - [x] Atualizar testes para o novo comportamento
 
 ## Feature: ConfigKey::Columns
-- [ ] Adicionar variante `Columns(Vec<String>)` no enum `ConfigKey`
-- [ ] Implementar `add(ConfigKey::Columns(...))` que atualiza `scrum_columns`
-- [ ] Escrever testes
+- [x] Adicionar variante `Columns(Vec<String>)` no enum `ConfigKey`
+- [x] Implementar `add(ConfigKey::Columns(...))` que atualiza `scrum_columns`
+- [x] Escrever testes
