@@ -4,14 +4,21 @@ use crossterm::{
     ExecutableCommand,
 };
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
     Frame, Terminal,
 };
 use sm_core::{BulletKind, TaskList};
 use std::io::stdout;
+
+enum InputMode {
+    Browsing,
+    WhichKey,
+    WhichKeyBullet,
+    Adding { input: String, cursor: usize },
+}
 
 pub fn run(tasks: &mut TaskList) -> std::io::Result<()> {
     enable_raw_mode()?;
@@ -25,13 +32,18 @@ pub fn run(tasks: &mut TaskList) -> std::io::Result<()> {
         Some(0)
     });
 
+    let mut mode = InputMode::Browsing;
+
     loop {
-        terminal.draw(|f| draw(f, tasks, &mut list_state))?;
+        terminal.draw(|f| draw(f, tasks, &mut list_state, &mode))?;
 
         if let Event::Key(key) = event::read()? {
-            if key.kind == KeyEventKind::Press {
-                match key.code {
-                    KeyCode::Char('q') => break,
+            if key.kind != KeyEventKind::Press {
+                continue;
+            }
+
+            match &mut mode {
+                InputMode::Browsing => match key.code {
                     KeyCode::Up | KeyCode::Char('k') => {
                         let i = list_state.selected().unwrap_or(0);
                         list_state.select(Some(i.saturating_sub(1)));
@@ -43,12 +55,18 @@ pub fn run(tasks: &mut TaskList) -> std::io::Result<()> {
                             list_state.select(Some(i + 1));
                         }
                     }
-                    KeyCode::Enter | KeyCode::Char(' ') => {
-                        if let Some(i) = list_state.selected() {
-                            if let Some(task) = tasks.list_tasks().get(i) {
-                                tasks.toggle_task(task.id);
-                            }
-                        }
+                    KeyCode::Char(' ') => {
+                        mode = InputMode::WhichKey;
+                    }
+                    _ => {}
+                },
+                InputMode::WhichKey => match key.code {
+                    KeyCode::Esc => mode = InputMode::Browsing,
+                    KeyCode::Char('a') => {
+                        mode = InputMode::Adding {
+                            input: String::new(),
+                            cursor: 0,
+                        };
                     }
                     KeyCode::Char('d') => {
                         if let Some(i) = list_state.selected() {
@@ -60,9 +78,92 @@ pub fn run(tasks: &mut TaskList) -> std::io::Result<()> {
                                 }
                             }
                         }
+                        mode = InputMode::Browsing;
+                    }
+                    KeyCode::Char('t') | KeyCode::Enter => {
+                        if let Some(i) = list_state.selected() {
+                            if let Some(task) = tasks.list_tasks().get(i) {
+                                tasks.toggle_task(task.id);
+                            }
+                        }
+                        mode = InputMode::Browsing;
+                    }
+                    KeyCode::Char('b') => {
+                        mode = InputMode::WhichKeyBullet;
+                    }
+                    KeyCode::Char('q') => break,
+                    _ => {}
+                },
+                InputMode::WhichKeyBullet => match key.code {
+                    KeyCode::Esc => mode = InputMode::WhichKey,
+                    KeyCode::Char('m') => {
+                        set_bullet(tasks, &list_state, BulletKind::Migrated);
+                        mode = InputMode::Browsing;
+                    }
+                    KeyCode::Char('s') => {
+                        set_bullet(tasks, &list_state, BulletKind::Scheduled);
+                        mode = InputMode::Browsing;
+                    }
+                    KeyCode::Char('e') => {
+                        set_bullet(tasks, &list_state, BulletKind::Event);
+                        mode = InputMode::Browsing;
+                    }
+                    KeyCode::Char('n') => {
+                        set_bullet(tasks, &list_state, BulletKind::Note);
+                        mode = InputMode::Browsing;
+                    }
+                    KeyCode::Char('p') => {
+                        set_bullet(tasks, &list_state, BulletKind::Priority);
+                        mode = InputMode::Browsing;
                     }
                     _ => {}
-                }
+                },
+                InputMode::Adding { input, cursor } => match key.code {
+                    KeyCode::Esc => {
+                        mode = InputMode::Browsing;
+                    }
+                    KeyCode::Enter => {
+                        if !input.is_empty() {
+                            let (desc, tags) = parse_input(input);
+                            tasks.add_task(desc, tags);
+                            list_state.select(Some(tasks.list_tasks().len().saturating_sub(1)));
+                        }
+                        mode = InputMode::Browsing;
+                    }
+                    KeyCode::Backspace => {
+                        if *cursor > 0 {
+                            let idx = *cursor - 1;
+                            input.remove(idx);
+                            *cursor -= 1;
+                        }
+                    }
+                    KeyCode::Delete => {
+                        if *cursor < input.len() {
+                            input.remove(*cursor);
+                        }
+                    }
+                    KeyCode::Left => {
+                        if *cursor > 0 {
+                            *cursor -= 1;
+                        }
+                    }
+                    KeyCode::Right => {
+                        if *cursor < input.len() {
+                            *cursor += 1;
+                        }
+                    }
+                    KeyCode::Home => {
+                        *cursor = 0;
+                    }
+                    KeyCode::End => {
+                        *cursor = input.len();
+                    }
+                    KeyCode::Char(c) => {
+                        input.insert(*cursor, c);
+                        *cursor += 1;
+                    }
+                    _ => {}
+                },
             }
         }
     }
@@ -72,7 +173,39 @@ pub fn run(tasks: &mut TaskList) -> std::io::Result<()> {
     Ok(())
 }
 
-fn draw(f: &mut Frame, tasks: &TaskList, list_state: &mut ListState) {
+fn set_bullet(tasks: &mut TaskList, list_state: &ListState, bullet: BulletKind) {
+    if let Some(i) = list_state.selected() {
+        if let Some(task) = tasks.tasks.get_mut(i) {
+            task.bullet = bullet;
+        }
+    }
+}
+
+fn parse_input(text: &str) -> (String, Vec<String>) {
+    let mut desc = String::new();
+    let mut tags = Vec::new();
+    for word in text.split_whitespace() {
+        if word.starts_with('#') {
+            tags.push(word[1..].to_string());
+        } else {
+            if !desc.is_empty() {
+                desc.push(' ');
+            }
+            desc.push_str(word);
+        }
+    }
+    (desc, tags)
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_x = (r.width * percent_x) / 100;
+    let popup_y = (r.height * percent_y) / 100;
+    let x = r.x + (r.width - popup_x) / 2;
+    let y = r.y + (r.height - popup_y) / 2;
+    Rect::new(x, y, popup_x, popup_y)
+}
+
+fn draw(f: &mut Frame, tasks: &TaskList, list_state: &mut ListState, mode: &InputMode) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(3), Constraint::Length(3)])
@@ -109,17 +242,147 @@ fn draw(f: &mut Frame, tasks: &TaskList, list_state: &mut ListState) {
 
     f.render_stateful_widget(list, chunks[0], list_state);
 
-    let help = Paragraph::new(Line::from(vec![
-        Span::styled("↑/k ↓/j ", Style::default().fg(Color::Gray)),
-        Span::styled("navigate  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("Space/Enter ", Style::default().fg(Color::Gray)),
-        Span::styled("toggle  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("d ", Style::default().fg(Color::Red)),
-        Span::styled("delete  ", Style::default().fg(Color::DarkGray)),
-        Span::styled("q ", Style::default().fg(Color::Red)),
-        Span::styled("quit", Style::default().fg(Color::DarkGray)),
-    ]))
-    .block(Block::default().borders(Borders::ALL).title(" Help "));
+    match mode {
+        InputMode::Browsing => {
+            let help = Paragraph::new(Line::from(vec![
+                Span::styled("↑/k ↓/j ", Style::default().fg(Color::Gray)),
+                Span::styled("nav  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("<Space> ", Style::default().fg(Color::Green)),
+                Span::styled("commands", Style::default().fg(Color::DarkGray)),
+            ]))
+            .block(Block::default().borders(Borders::ALL).title(" Help "));
+            f.render_widget(help, chunks[1]);
+        }
+        InputMode::WhichKey => {
+            let help = Paragraph::new(Line::from(vec![
+                Span::styled("which-key: ", Style::default().fg(Color::Yellow)),
+                Span::styled("a", Style::default().fg(Color::Green)),
+                Span::styled("dd  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("t", Style::default().fg(Color::Green)),
+                Span::styled("oggle  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("b", Style::default().fg(Color::Cyan)),
+                Span::styled("ullet  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("d", Style::default().fg(Color::Red)),
+                Span::styled("el  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("q", Style::default().fg(Color::Red)),
+                Span::styled("uit  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("Esc", Style::default().fg(Color::Gray)),
+                Span::styled("cancel", Style::default().fg(Color::DarkGray)),
+            ]))
+            .block(Block::default().borders(Borders::ALL).title(" Command "));
+            f.render_widget(help, chunks[1]);
 
-    f.render_widget(help, chunks[1]);
+            let area = centered_rect(36, 38, f.area());
+            f.render_widget(Clear, area);
+
+            let items = vec![
+                ListItem::new(Line::from(vec![
+                    Span::styled("  a  ", Style::default().fg(Color::Green)),
+                    Span::styled("Add task", Style::default().fg(Color::White)),
+                ])),
+                ListItem::new(Line::from(vec![
+                    Span::styled("  d  ", Style::default().fg(Color::Red)),
+                    Span::styled("Delete task", Style::default().fg(Color::White)),
+                ])),
+                ListItem::new(Line::from(vec![
+                    Span::styled("  t  ", Style::default().fg(Color::Yellow)),
+                    Span::styled("Toggle (", Style::default().fg(Color::White)),
+                    Span::styled("•", Style::default().fg(Color::Yellow)),
+                    Span::styled("/", Style::default().fg(Color::White)),
+                    Span::styled("x", Style::default().fg(Color::Yellow)),
+                    Span::styled(")", Style::default().fg(Color::White)),
+                ])),
+                ListItem::new(Line::from(vec![
+                    Span::styled("  b  ", Style::default().fg(Color::Cyan)),
+                    Span::styled("Bullet journal...", Style::default().fg(Color::White)),
+                ])),
+                ListItem::new(Line::from(vec![
+                    Span::styled("  q  ", Style::default().fg(Color::Red)),
+                    Span::styled("Quit", Style::default().fg(Color::White)),
+                ])),
+                ListItem::new(Line::from(vec![
+                    Span::styled("  Esc", Style::default().fg(Color::Gray)),
+                    Span::styled("  Cancel", Style::default().fg(Color::DarkGray)),
+                ])),
+            ];
+            let popup = List::new(items)
+                .block(Block::default().borders(Borders::ALL).title(" Which Key "))
+                .highlight_style(Style::default());
+            f.render_widget(popup, area);
+        }
+        InputMode::WhichKeyBullet => {
+            let help = Paragraph::new(Line::from(vec![
+                Span::styled("bullet: ", Style::default().fg(Color::Yellow)),
+                Span::styled("m", Style::default().fg(Color::Green)),
+                Span::styled("igrate  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("s", Style::default().fg(Color::Green)),
+                Span::styled("chedule  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("e", Style::default().fg(Color::Green)),
+                Span::styled("vent  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("n", Style::default().fg(Color::Green)),
+                Span::styled("ote  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("p", Style::default().fg(Color::Green)),
+                Span::styled("riority  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("Esc", Style::default().fg(Color::Gray)),
+                Span::styled("back", Style::default().fg(Color::DarkGray)),
+            ]))
+            .block(Block::default().borders(Borders::ALL).title(" Command "));
+            f.render_widget(help, chunks[1]);
+
+            let area = centered_rect(36, 38, f.area());
+            f.render_widget(Clear, area);
+
+            let items = vec![
+                ListItem::new(Line::from(vec![
+                    Span::styled("  m  ", Style::default().fg(Color::Green)),
+                    Span::styled("Migrate ", Style::default().fg(Color::White)),
+                    Span::styled(">", Style::default().fg(Color::Yellow)),
+                ])),
+                ListItem::new(Line::from(vec![
+                    Span::styled("  s  ", Style::default().fg(Color::Green)),
+                    Span::styled("Schedule ", Style::default().fg(Color::White)),
+                    Span::styled("<", Style::default().fg(Color::Yellow)),
+                ])),
+                ListItem::new(Line::from(vec![
+                    Span::styled("  e  ", Style::default().fg(Color::Green)),
+                    Span::styled("Event ", Style::default().fg(Color::White)),
+                    Span::styled("o", Style::default().fg(Color::Yellow)),
+                ])),
+                ListItem::new(Line::from(vec![
+                    Span::styled("  n  ", Style::default().fg(Color::Green)),
+                    Span::styled("Note ", Style::default().fg(Color::White)),
+                    Span::styled("-", Style::default().fg(Color::Yellow)),
+                ])),
+                ListItem::new(Line::from(vec![
+                    Span::styled("  p  ", Style::default().fg(Color::Green)),
+                    Span::styled("Priority ", Style::default().fg(Color::White)),
+                    Span::styled("*", Style::default().fg(Color::Red)),
+                ])),
+                ListItem::new(Line::from(vec![
+                    Span::styled("  Esc", Style::default().fg(Color::Gray)),
+                    Span::styled("  Back", Style::default().fg(Color::DarkGray)),
+                ])),
+            ];
+            let popup = List::new(items)
+                .block(Block::default().borders(Borders::ALL).title(" Bullet Journal "))
+                .highlight_style(Style::default());
+            f.render_widget(popup, area);
+        }
+        InputMode::Adding { input, cursor } => {
+            let display = if *cursor < input.len() {
+                let mut s = input.clone();
+                s.insert(*cursor, '█');
+                s
+            } else {
+                format!("{}█", input)
+            };
+            let input_widget = Paragraph::new(Line::from(vec![
+                Span::styled("Task: ", Style::default().fg(Color::Green)),
+                Span::styled(display, Style::default().fg(Color::White)),
+                Span::styled("  #tag1 #tag2", Style::default().fg(Color::DarkGray)),
+            ]))
+            .block(Block::default().borders(Borders::ALL).title(" Add Task (Esc cancel) "));
+            f.render_widget(input_widget, chunks[1]);
+        }
+    }
 }
