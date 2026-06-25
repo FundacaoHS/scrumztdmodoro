@@ -84,7 +84,7 @@ updated: 2026-06-25
 - [ ] Comando `:SMPomo start|stop|status` — timer Pomodoro no statusline
 - [ ] Highlight de bullets (cores diferentes por tipo)
 - [ ] Atualização automática ao salvar buffer
-- [ ] **Scanner de TODOs**: buscar `- [ ]`, `TODO:`, `FIXME:`, `HACK:`, `XXX:` nos arquivos do projeto e listar num buffer tipo Telescope/trouble
+- [ ] **Scanner de TODOs com fzf**: buscar `- [ ]`, `TODO:`, `FIXME:`, `HACK:`, `XXX:` nos arquivos do projeto via `rg` + `fzf` para seleção interativa
 - [ ] Pular para a linha do arquivo ao selecionar um TODO escaneado
 - [ ] Opção de importar um TODO escaneado como task do Bullet Journal (`:SMImport`)
 - [ ] Adicionar highlight customizado para TODOs nos buffers (signcolumn + virtual text)
