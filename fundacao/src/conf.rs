@@ -187,14 +187,14 @@ impl ConfigBuilder {
     }
 }
 
-fn default_vault_path() -> PathBuf {
+pub fn default_vault_path() -> PathBuf {
     let base = directories::ProjectDirs::from("com", "fundacao", "sm")
         .map(|d| d.data_dir().to_path_buf())
         .unwrap_or_else(|| PathBuf::from("./.sm"));
     base.join("vault")
 }
 
-fn default_conf_path() -> PathBuf {
+pub fn default_conf_path() -> PathBuf {
     let base = directories::ProjectDirs::from("com", "fundacao", "sm")
         .map(|d| d.config_dir().to_path_buf())
         .unwrap_or_else(|| PathBuf::from("./.sm"));
