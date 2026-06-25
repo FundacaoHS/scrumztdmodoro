@@ -1,34 +1,54 @@
+use std::fs;
 use std::path::PathBuf;
 
-use fundacao::{Config, ConfigKey, VaultConfig};
+use fundacao::{AddStatus, Config, ConfigKey, VaultConfig};
 
 #[test]
-fn test_add_updates_vault_path() {
+fn test_add_creates_vault_on_disk() {
+    let dir = std::env::temp_dir().join("int_test_add_create");
+    let _ = fs::remove_dir_all(&dir);
+
     let mut cfg = Config::default();
-    let original = cfg.vault.clone();
+    let status = cfg
+        .add(ConfigKey::Vault(VaultConfig::new().path(&dir)))
+        .unwrap();
 
-    let new_path = PathBuf::from("./custom_vault");
-    cfg.add(ConfigKey::Vault(VaultConfig::new().path(&new_path)));
+    assert_eq!(status, AddStatus::Created);
+    assert!(dir.exists());
+    assert!(dir.join("done").exists());
 
-    assert_eq!(cfg.vault, new_path);
-    assert_ne!(cfg.vault, original);
+    fs::remove_dir_all(&dir).unwrap();
 }
 
 #[test]
-fn test_add_no_path_keeps_original() {
+fn test_add_returns_already_exists() {
+    let dir = std::env::temp_dir().join("int_test_add_exists");
+    fs::create_dir_all(&dir).unwrap();
+
+    let mut cfg = Config::default();
+    let status = cfg
+        .add(ConfigKey::Vault(VaultConfig::new().path(&dir)))
+        .unwrap();
+
+    assert_eq!(status, AddStatus::AlreadyExists);
+
+    fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn test_add_no_path_returns_no_change() {
     let mut cfg = Config::default();
     let original = cfg.vault.clone();
 
-    cfg.add(ConfigKey::Vault(VaultConfig::new()));
+    let status = cfg.add(ConfigKey::Vault(VaultConfig::new())).unwrap();
 
+    assert_eq!(status, AddStatus::NoChange);
     assert_eq!(cfg.vault, original);
 }
 
 #[test]
 fn test_vault_config_builder() {
-    let vcfg = VaultConfig::new()
-        .path("/tmp/test_vault");
-
+    let vcfg = VaultConfig::new().path("/tmp/test_vault");
     assert_eq!(vcfg.path, Some(PathBuf::from("/tmp/test_vault")));
 }
 

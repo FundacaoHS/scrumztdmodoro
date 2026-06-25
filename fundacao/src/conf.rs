@@ -49,22 +49,45 @@ impl Config {
         Ok(())
     }
 
-    /// Adiciona ou atualiza uma config com base na chave fornecida
-    pub fn add(&mut self, key: ConfigKey) {
+    /// Adiciona uma config com base na chave fornecida.
+    /// Se o vault nao existir no disco, cria o diretorio + salva .conf.
+    /// Se ja existir, retorna `AlreadyExists` sem modificar o disco.
+    pub fn add(&mut self, key: ConfigKey) -> Result<AddStatus, ConfigError> {
         match key {
             ConfigKey::Vault(cfg) => {
                 if let Some(path) = cfg.path {
                     self.vault = path;
+                    if !self.exists() {
+                        let vault = crate::Vault::new(&self.vault);
+                        vault.ensure()?;
+                        let conf_path = default_conf_path();
+                        self.save(conf_path)?;
+                        Ok(AddStatus::Created)
+                    } else {
+                        Ok(AddStatus::AlreadyExists)
+                    }
+                } else {
+                    Ok(AddStatus::NoChange)
                 }
             }
         }
     }
 
     /// Verifica se o vault ja existe no disco (privado)
-    #[allow(dead_code)]
     fn exists(&self) -> bool {
         self.vault.exists()
     }
+}
+
+/// Status retornado por `Config::add()`
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AddStatus {
+    /// Vault foi criado no disco e .conf salvo
+    Created,
+    /// Vault ja existia, nada foi alterado
+    AlreadyExists,
+    /// Nenhuma alteracao (caminho nao fornecido)
+    NoChange,
 }
 
 /// Chave que define o tipo de dado aceito na config
@@ -133,6 +156,13 @@ fn default_vault_path() -> PathBuf {
     base.join("vault")
 }
 
+fn default_conf_path() -> PathBuf {
+    let base = directories::ProjectDirs::from("com", "fundacao", "sm")
+        .map(|d| d.config_dir().to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("./.sm"));
+    base.join("sm.yaml")
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("IO error: {0}")]
@@ -173,12 +203,43 @@ mod tests {
     }
 
     #[test]
-    fn test_add_changes_path() {
+    fn test_add_creates_vault_when_missing() {
+        let dir = std::env::temp_dir().join("test_add_create_vault");
+        let _ = fs::remove_dir_all(&dir);
+
         let mut cfg = Config::default();
-        let new_path = PathBuf::from("/tmp/novo_vault");
+        let result = cfg
+            .add(ConfigKey::Vault(VaultConfig::new().path(&dir)))
+            .unwrap();
 
-        cfg.add(ConfigKey::Vault(VaultConfig::new().path(&new_path)));
+        assert_eq!(result, AddStatus::Created);
+        assert_eq!(cfg.vault, dir);
+        assert!(dir.exists());
 
-        assert_eq!(cfg.vault, new_path);
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_add_returns_already_exists() {
+        let dir = std::env::temp_dir().join("test_add_exists_vault");
+        fs::create_dir_all(&dir).unwrap();
+
+        let mut cfg = Config::default();
+        let result = cfg
+            .add(ConfigKey::Vault(VaultConfig::new().path(&dir)))
+            .unwrap();
+
+        assert_eq!(result, AddStatus::AlreadyExists);
+        assert_eq!(cfg.vault, dir);
+
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn test_add_no_path_returns_no_change() {
+        let mut cfg = Config::default();
+        let result = cfg.add(ConfigKey::Vault(VaultConfig::new())).unwrap();
+
+        assert_eq!(result, AddStatus::NoChange);
     }
 }

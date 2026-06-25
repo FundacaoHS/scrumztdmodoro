@@ -42,6 +42,9 @@ updated: 2026-06-25
 ## Feature: Config - Add & Exists
 - [x] Adicionar enum `ConfigKey` com variante `Vault`
 - [x] Adicionar struct `VaultConfig` (scaffold)
-- [x] Implementar `Config::add(key, valor)`
+- [x] Implementar `Config::add(key, valor)` esboço inicial
 - [x] Implementar `Config::exists()` (privado)
-- [x] Escrever testes
+- [x] Escrever testes iniciais
+- [ ] `add()` chamar `exists()` internamente e criar vault + .conf se não existir
+- [ ] Adicionar `AddStatus` (Created / AlreadyExists / NoChange)
+- [ ] Atualizar testes para o novo comportamento
