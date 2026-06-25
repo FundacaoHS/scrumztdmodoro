@@ -51,6 +51,17 @@ fn test_vault_config_builder() {
 }
 
 #[test]
+fn test_add_columns() {
+    let mut cfg = Config::default();
+    let cols = vec!["a".into(), "b".into(), "c".into()];
+
+    let result = cfg.add(ConfigKey::Columns(cols.clone())).unwrap();
+
+    assert_eq!(result.scrum_columns, cols);
+    assert_eq!(result.scrum_columns.len(), 3);
+}
+
+#[test]
 fn test_default_config_has_vault() {
     let cfg = Config::default();
     assert!(!cfg.vault.as_os_str().is_empty());

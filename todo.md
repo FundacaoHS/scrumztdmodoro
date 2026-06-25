@@ -48,3 +48,8 @@ updated: 2026-06-25
 - [x] `add()` chamar `exists()` internamente e criar vault + .conf se não existir
 - [x] Adicionar `AddStatus` (Created / AlreadyExists / NoChange)
 - [x] Atualizar testes para o novo comportamento
+
+## Feature: ConfigKey::Columns
+- [ ] Adicionar variante `Columns(Vec<String>)` no enum `ConfigKey`
+- [ ] Implementar `add(ConfigKey::Columns(...))` que atualiza `scrum_columns`
+- [ ] Escrever testes

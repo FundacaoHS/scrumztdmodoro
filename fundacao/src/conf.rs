@@ -66,6 +66,10 @@ impl Config {
                 }
                 Ok(self)
             }
+            ConfigKey::Columns(columns) => {
+                self.scrum_columns = columns;
+                Ok(self)
+            }
         }
     }
 
@@ -80,6 +84,8 @@ impl Config {
 pub enum ConfigKey {
     /// Configuracoes do vault (diretorio de arquivos .md)
     Vault(VaultConfig),
+    /// Colunas do scrum board
+    Columns(Vec<String>),
 }
 
 /// Configuracoes do vault
@@ -226,5 +232,15 @@ mod tests {
         let result = cfg.add(ConfigKey::Vault(VaultConfig::new())).unwrap();
 
         assert_eq!(result.vault, original);
+    }
+
+    #[test]
+    fn test_add_columns_updates_scrum_columns() {
+        let mut cfg = Config::default();
+        let cols = vec!["backlog".into(), "todo".into(), "testing".into()];
+
+        let result = cfg.add(ConfigKey::Columns(cols.clone())).unwrap();
+
+        assert_eq!(result.scrum_columns, cols);
     }
 }
