@@ -10,7 +10,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame, Terminal,
 };
-use sm_core::TaskList;
+use sm_core::{BulletKind, TaskList};
 use std::io::stdout;
 
 pub fn run(tasks: &mut TaskList) -> std::io::Result<()> {
@@ -82,8 +82,8 @@ fn draw(f: &mut Frame, tasks: &TaskList, list_state: &mut ListState) {
         .list_tasks()
         .iter()
         .map(|t| {
-            let status = if t.done { "[x]" } else { "[ ]" };
-            let style = if t.done {
+            let is_done = t.bullet == BulletKind::Done;
+            let style = if is_done {
                 Style::default().fg(Color::DarkGray).add_modifier(Modifier::CROSSED_OUT)
             } else {
                 Style::default().fg(Color::White)
@@ -94,7 +94,7 @@ fn draw(f: &mut Frame, tasks: &TaskList, list_state: &mut ListState) {
                 format!(" #{}", t.tags.join(" #"))
             };
             ListItem::new(Line::from(vec![
-                Span::styled(format!("{} ", status), style),
+                Span::styled(format!("{} ", t.bullet.symbol()), style),
                 Span::styled(format!("{}", t.id), Style::default().fg(Color::Cyan)),
                 Span::styled(" - ", style),
                 Span::styled(format!("{}{}", t.description, tags), style),
