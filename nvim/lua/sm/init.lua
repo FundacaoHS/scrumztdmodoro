@@ -111,4 +111,21 @@ function M.parse_line(line)
   return { bullet = bullet, id = tonumber(id), description = cleaned, raw = desc, tags = tags }
 end
 
+function M.pomo_statusline()
+  local res = M.run_sync("pomo status")
+  local cleaned = vim.trim(res or "")
+  if cleaned == "" or cleaned:match("Idle") then
+    return ""
+  end
+  if cleaned:match("Focusing") then
+    local time = cleaned:match("%[(%d+:%d+)%]") or ""
+    return "▸ " .. time
+  end
+  if cleaned:match("Short Break") or cleaned:match("Long Break") then
+    local time = cleaned:match("%[(%d+:%d+)%]") or ""
+    return "◷ " .. time
+  end
+  return cleaned
+end
+
 return M

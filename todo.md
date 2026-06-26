@@ -99,6 +99,6 @@ updated: 2026-06-25
 - [x] Integração com noice.nvim (fallback pra `vim.notify`)
 - [x] **Scanner de TODOs**: `:SMScan` — `rg` + quickfix list, mostra TODOs/FIXMEs/HACKs do projeto
 - [x] Atualização automática ao usar teclas nos buffers
-- [ ] Timer Pomodoro no statusline
-- [ ] Opção de importar TODO escaneado como task do Bullet Journal (`:SMImport`)
-- [ ] Adicionar highlight customizado para TODOs nos buffers (signcolumn + virtual text)
+- [x] Timer Pomodoro no statusline (`sm_pomo_statusline()` + auto-refresh 30s)
+- [x] Opção de importar TODO escaneado como task do Bullet Journal (`:SMImport`)
+- [x] Signcolumn + virtual text highlights para TODO/FIXME/HACK/XXX/`- [ ]`
