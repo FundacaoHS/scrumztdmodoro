@@ -2,6 +2,7 @@ use chrono::{DateTime, Local, Utc};
 use fundacao::Vault;
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::path::Path;
 
 /// Simbolos do Bullet Journal
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -47,6 +48,10 @@ impl BulletKind {
             _ => None,
         }
     }
+
+    pub fn is_unfinished(&self) -> bool {
+        matches!(self, BulletKind::Task | BulletKind::Scheduled | BulletKind::Priority)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +67,27 @@ pub struct Task {
 pub struct TaskList {
     pub tasks: Vec<Task>,
     pub next_id: u64,
+}
+
+// --- Helpers de marcador ---
+
+pub const MARKER_BACKLOG: &str = "[backlog]";
+pub const MARKER_TODO: &str = "[todo]";
+pub const MARKER_CANCELLED: &str = "[cancelled]";
+
+pub fn has_marker(text: &str, marker: &str) -> bool {
+    text.contains(marker)
+}
+
+pub fn add_marker(text: &str, marker: &str) -> String {
+    if has_marker(text, marker) {
+        return text.to_string();
+    }
+    format!("{} {}", text, marker)
+}
+
+pub fn remove_marker(text: &str, marker: &str) -> String {
+    text.replace(marker, "").split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 impl TaskList {
@@ -80,6 +106,18 @@ impl TaskList {
             tags,
         });
         self.tasks.last().unwrap()
+    }
+
+    /// Add task que cai no backlog (description ganha [backlog])
+    pub fn add_backlog(&mut self, description: String, tags: Vec<String>) -> &Task {
+        let desc = add_marker(&description, MARKER_BACKLOG);
+        self.add_task(desc, tags)
+    }
+
+    /// Add task pro dia de hoje (description ganha [todo])
+    pub fn add_today(&mut self, description: String, tags: Vec<String>) -> &Task {
+        let desc = add_marker(&description, MARKER_TODO);
+        self.add_task(desc, tags)
     }
 
     pub fn remove_task(&mut self, id: u64) -> Option<Task> {
@@ -106,8 +144,49 @@ impl TaskList {
         &self.tasks
     }
 
+    /// Retorna tasks sem [backlog] (daily view)
+    pub fn list_daily(&self) -> Vec<&Task> {
+        self.tasks.iter().filter(|t| !has_marker(&t.description, MARKER_BACKLOG)).collect()
+    }
+
+    /// Retorna tasks com [backlog]
+    pub fn list_backlog(&self) -> Vec<&Task> {
+        self.tasks.iter().filter(|t| has_marker(&t.description, MARKER_BACKLOG)).collect()
+    }
+
+    /// Puxa task do backlog pro daily: remove [backlog], add [todo]
+    pub fn pull_task(&mut self, id: u64) -> Option<&Task> {
+        let task = self.tasks.iter_mut().find(|t| t.id == id)?;
+        if !has_marker(&task.description, MARKER_BACKLOG) {
+            return Some(task);
+        }
+        task.description = remove_marker(&task.description, MARKER_BACKLOG);
+        task.description = add_marker(&task.description, MARKER_TODO);
+        Some(task)
+    }
+
+    /// Puxa todas tasks do backlog
+    pub fn pull_all(&mut self) {
+        let ids: Vec<u64> = self.tasks.iter()
+            .filter(|t| has_marker(&t.description, MARKER_BACKLOG))
+            .map(|t| t.id)
+            .collect();
+        for id in ids {
+            self.pull_task(id);
+        }
+    }
+
+    /// Marca task como cancelada
+    pub fn mark_cancelled(&mut self, id: u64) -> Option<&Task> {
+        let task = self.tasks.iter_mut().find(|t| t.id == id)?;
+        task.description = remove_marker(&task.description, MARKER_TODO);
+        task.description = remove_marker(&task.description, MARKER_BACKLOG);
+        task.description = add_marker(&task.description, MARKER_CANCELLED);
+        Some(task)
+    }
+
     /// Le tasks de um arquivo .md no formato Bullet Journal
-    pub fn from_md(path: impl AsRef<std::path::Path>) -> Result<Self, TaskError> {
+    pub fn from_md(path: impl AsRef<Path>) -> Result<Self, TaskError> {
         let content = fs::read_to_string(path.as_ref())?;
         Self::parse_md(&content)
     }
@@ -148,9 +227,14 @@ impl TaskList {
         Ok(list)
     }
 
-    /// Gera o texto markdown no formato Bullet Journal
+    /// Gera o texto markdown com data de hoje
     pub fn to_md(&self) -> String {
         let date = Local::now().format("%Y-%m-%d").to_string();
+        self.to_md_for_date(&date)
+    }
+
+    /// Gera o texto markdown com data especifica
+    pub fn to_md_for_date(&self, date: &str) -> String {
         let mut out = format!("# {}\n\n", date);
 
         for task in &self.tasks {
@@ -174,6 +258,16 @@ impl TaskList {
         Ok(())
     }
 
+    /// Salva tasks num path especifico com data especifica no cabecalho
+    pub fn save_to_path(&self, path: &Path, date: &str) -> Result<(), TaskError> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let content = self.to_md_for_date(date);
+        fs::write(path, content)?;
+        Ok(())
+    }
+
     /// Carrega tasks do vault do dia
     pub fn load_from_vault(vault: &Vault) -> Result<Self, TaskError> {
         let path = vault.today_todo();
@@ -182,6 +276,70 @@ impl TaskList {
         } else {
             Ok(TaskList::new())
         }
+    }
+
+    /// Migra tasks inacabadas do ultimo dia para hoje.
+    /// - Bullet inacabado ({Task, Scheduled, Priority}) sem [backlog] → copia pra hoje com [todo], vira > no ultimo dia
+    /// - Bullet Note → move pra notes/YYYY-MM-DD.md, vira > no ultimo dia
+    /// - Bullet Done/Migrated ou com [backlog] → permanece como esta
+    pub fn migrate_untouched(&mut self, last_path: &Path, vault: &Vault) -> Result<(), TaskError> {
+        let date_stem = last_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown");
+
+        let mut last_tasks = TaskList::from_md(last_path)?;
+        let mut notes = Vec::new();
+
+        for task in &last_tasks.tasks {
+            let has_backlog = has_marker(&task.description, MARKER_BACKLOG);
+            let has_cancelled = has_marker(&task.description, MARKER_CANCELLED);
+
+            if task.bullet.is_unfinished() && !has_backlog && !has_cancelled {
+                let desc = add_marker(&task.description, MARKER_TODO);
+                let desc = remove_marker(&desc, MARKER_BACKLOG);
+                self.add_task(desc, task.tags.clone());
+            }
+
+            if task.bullet == BulletKind::Note && !has_cancelled {
+                notes.push(task.description.clone());
+            }
+        }
+
+        // Salva notas
+        if !notes.is_empty() {
+            let notes_path = vault.notes_file_for(date_stem);
+            if let Some(parent) = notes_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            let notes_content = format!(
+                "---\ncreated: {}\ntags: [note]\n---\n\n# Notas\n\n",
+                date_stem
+            );
+            let notes_body = notes
+                .iter()
+                .map(|n| format!("- {}", n))
+                .collect::<Vec<_>>()
+                .join("\n");
+            fs::write(&notes_path, format!("{}{}\n", notes_content, notes_body))?;
+        }
+
+        // Marca tasks migradas como > no ultimo dia
+        for task in &mut last_tasks.tasks {
+            let has_backlog = has_marker(&task.description, MARKER_BACKLOG);
+            let has_cancelled = has_marker(&task.description, MARKER_CANCELLED);
+            if (task.bullet.is_unfinished() || task.bullet == BulletKind::Note)
+                && !has_backlog
+                && !has_cancelled
+            {
+                task.bullet = BulletKind::Migrated;
+            }
+        }
+
+        // Salva ultimo dia atualizado
+        last_tasks.save_to_path(last_path, date_stem)?;
+
+        Ok(())
     }
 }
 

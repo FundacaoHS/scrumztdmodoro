@@ -1,3 +1,6 @@
+use std::io::stdout;
+use std::fs;
+
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -12,14 +15,15 @@ use ratatui::{
 };
 use chrono::Local;
 use fundacao::Vault;
-use sm_core::{BulletKind, TaskList};
-use std::io::stdout;
+use sm_core::{has_marker, BulletKind, TaskList};
 
 enum InputMode {
     Browsing,
     WhichKey,
     WhichKeyBullet,
     Adding { input: String, cursor: usize },
+    Backlog,
+    Notes { content: String },
 }
 
 pub fn run(tasks: &mut TaskList, vault: &Vault, project_name: &str) -> std::io::Result<()> {
@@ -28,7 +32,8 @@ pub fn run(tasks: &mut TaskList, vault: &Vault, project_name: &str) -> std::io::
     let mut terminal = Terminal::new(ratatui::backend::CrosstermBackend::new(stdout()))?;
 
     let mut list_state = ListState::default();
-    list_state.select(if tasks.list_tasks().is_empty() {
+    let daily_count = tasks.list_daily().len();
+    list_state.select(if daily_count == 0 {
         None
     } else {
         Some(0)
@@ -47,13 +52,14 @@ pub fn run(tasks: &mut TaskList, vault: &Vault, project_name: &str) -> std::io::
             match &mut mode {
                 InputMode::Browsing => match key.code {
                     KeyCode::Up | KeyCode::Char('k') => {
+                        let len = tasks.list_daily().len();
                         let i = list_state.selected().unwrap_or(0);
-                        list_state.select(Some(i.saturating_sub(1)));
+                        list_state.select(Some(i.saturating_sub(1).min(len.saturating_sub(1))));
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
-                        let len = tasks.list_tasks().len();
+                        let len = tasks.list_daily().len();
                         let i = list_state.selected().unwrap_or(0);
-                        if i + 1 < len {
+                        if len > 0 && i + 1 < len {
                             list_state.select(Some(i + 1));
                         }
                     }
@@ -72,20 +78,20 @@ pub fn run(tasks: &mut TaskList, vault: &Vault, project_name: &str) -> std::io::
                     }
                     KeyCode::Char('d') => {
                         if let Some(i) = list_state.selected() {
-                            if let Some(task) = tasks.list_tasks().get(i) {
+                            let daily = tasks.list_daily();
+                            if let Some(task) = daily.get(i) {
                                 tasks.remove_task(task.id);
                                 tasks.save_to_vault(vault).ok();
-                                let len = tasks.list_tasks().len();
-                                if i >= len {
-                                    list_state.select(Some(len.saturating_sub(1)));
-                                }
+                                let len = tasks.list_daily().len();
+                                list_state.select(if len == 0 { None } else { Some(i.min(len.saturating_sub(1))) });
                             }
                         }
                         mode = InputMode::Browsing;
                     }
                     KeyCode::Char('t') | KeyCode::Enter => {
                         if let Some(i) = list_state.selected() {
-                            if let Some(task) = tasks.list_tasks().get(i) {
+                            let daily = tasks.list_daily();
+                            if let Some(task) = daily.get(i) {
                                 tasks.toggle_task(task.id);
                                 tasks.save_to_vault(vault).ok();
                             }
@@ -95,34 +101,84 @@ pub fn run(tasks: &mut TaskList, vault: &Vault, project_name: &str) -> std::io::
                     KeyCode::Char('b') => {
                         mode = InputMode::WhichKeyBullet;
                     }
+                    KeyCode::Char('c') => {
+                        if let Some(i) = list_state.selected() {
+                            let daily = tasks.list_daily();
+                            if let Some(task) = daily.get(i) {
+                                tasks.mark_cancelled(task.id);
+                                tasks.save_to_vault(vault).ok();
+                                let len = tasks.list_daily().len();
+                                list_state.select(if len == 0 { None } else { Some(i.min(len.saturating_sub(1))) });
+                            }
+                        }
+                        mode = InputMode::Browsing;
+                    }
+                    KeyCode::Char('B') => {
+                        list_state.select(Some(0));
+                        mode = InputMode::Backlog;
+                    }
+                    KeyCode::Char('N') => {
+                        let notes_path = vault.notes_file();
+                        let content = if notes_path.exists() {
+                            fs::read_to_string(&notes_path).unwrap_or_default()
+                        } else {
+                            "No notes for today yet.".to_string()
+                        };
+                        mode = InputMode::Notes { content };
+                    }
                     KeyCode::Char('q') => break,
                     _ => {}
                 },
                 InputMode::WhichKeyBullet => match key.code {
                     KeyCode::Esc => mode = InputMode::WhichKey,
                     KeyCode::Char('m') => {
-                        set_bullet(tasks, &list_state, BulletKind::Migrated);
-                        tasks.save_to_vault(vault).ok();
+                        if let Some(i) = list_state.selected() {
+                            let daily = tasks.list_daily();
+                            if let Some(task) = daily.get(i) {
+                                tasks.set_bullet(task.id, BulletKind::Migrated);
+                                tasks.save_to_vault(vault).ok();
+                            }
+                        }
                         mode = InputMode::Browsing;
                     }
                     KeyCode::Char('s') => {
-                        set_bullet(tasks, &list_state, BulletKind::Scheduled);
-                        tasks.save_to_vault(vault).ok();
+                        if let Some(i) = list_state.selected() {
+                            let daily = tasks.list_daily();
+                            if let Some(task) = daily.get(i) {
+                                tasks.set_bullet(task.id, BulletKind::Scheduled);
+                                tasks.save_to_vault(vault).ok();
+                            }
+                        }
                         mode = InputMode::Browsing;
                     }
                     KeyCode::Char('e') => {
-                        set_bullet(tasks, &list_state, BulletKind::Event);
-                        tasks.save_to_vault(vault).ok();
+                        if let Some(i) = list_state.selected() {
+                            let daily = tasks.list_daily();
+                            if let Some(task) = daily.get(i) {
+                                tasks.set_bullet(task.id, BulletKind::Event);
+                                tasks.save_to_vault(vault).ok();
+                            }
+                        }
                         mode = InputMode::Browsing;
                     }
                     KeyCode::Char('n') => {
-                        set_bullet(tasks, &list_state, BulletKind::Note);
-                        tasks.save_to_vault(vault).ok();
+                        if let Some(i) = list_state.selected() {
+                            let daily = tasks.list_daily();
+                            if let Some(task) = daily.get(i) {
+                                tasks.set_bullet(task.id, BulletKind::Note);
+                                tasks.save_to_vault(vault).ok();
+                            }
+                        }
                         mode = InputMode::Browsing;
                     }
                     KeyCode::Char('p') => {
-                        set_bullet(tasks, &list_state, BulletKind::Priority);
-                        tasks.save_to_vault(vault).ok();
+                        if let Some(i) = list_state.selected() {
+                            let daily = tasks.list_daily();
+                            if let Some(task) = daily.get(i) {
+                                tasks.set_bullet(task.id, BulletKind::Priority);
+                                tasks.save_to_vault(vault).ok();
+                            }
+                        }
                         mode = InputMode::Browsing;
                     }
                     _ => {}
@@ -134,9 +190,10 @@ pub fn run(tasks: &mut TaskList, vault: &Vault, project_name: &str) -> std::io::
                     KeyCode::Enter => {
                         if !input.is_empty() {
                             let (desc, tags) = parse_input(input);
-                            tasks.add_task(desc, tags);
+                            tasks.add_backlog(desc, tags);
                             tasks.save_to_vault(vault).ok();
-                            list_state.select(Some(tasks.list_tasks().len().saturating_sub(1)));
+                            let daily_len = tasks.list_daily().len();
+                            list_state.select(if daily_len == 0 { None } else { Some(daily_len.saturating_sub(1)) });
                         }
                         mode = InputMode::Browsing;
                     }
@@ -174,6 +231,45 @@ pub fn run(tasks: &mut TaskList, vault: &Vault, project_name: &str) -> std::io::
                     }
                     _ => {}
                 },
+                InputMode::Backlog => match key.code {
+                    KeyCode::Esc => {
+                        mode = InputMode::Browsing;
+                    }
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        let len = tasks.list_backlog().len();
+                        let i = list_state.selected().unwrap_or(0);
+                        list_state.select(Some(i.saturating_sub(1).min(len.saturating_sub(1))));
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        let len = tasks.list_backlog().len();
+                        let i = list_state.selected().unwrap_or(0);
+                        if len > 0 && i + 1 < len {
+                            list_state.select(Some(i + 1));
+                        }
+                    }
+                    KeyCode::Enter => {
+                        if let Some(i) = list_state.selected() {
+                            let backlog = tasks.list_backlog();
+                            if let Some(task) = backlog.get(i) {
+                                tasks.pull_task(task.id);
+                                tasks.save_to_vault(vault).ok();
+                                let len = tasks.list_backlog().len();
+                                list_state.select(if len == 0 { None } else { Some(i.min(len.saturating_sub(1))) });
+                                if tasks.list_backlog().is_empty() {
+                                    mode = InputMode::Browsing;
+                                }
+                            }
+                        }
+                    }
+                    KeyCode::Char('q') => break,
+                    _ => {}
+                },
+                InputMode::Notes { .. } => match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('N') => {
+                        mode = InputMode::Browsing;
+                    }
+                    _ => {}
+                },
             }
         }
     }
@@ -181,14 +277,6 @@ pub fn run(tasks: &mut TaskList, vault: &Vault, project_name: &str) -> std::io::
     disable_raw_mode()?;
     stdout().execute(LeaveAlternateScreen)?;
     Ok(())
-}
-
-fn set_bullet(tasks: &mut TaskList, list_state: &ListState, bullet: BulletKind) {
-    if let Some(i) = list_state.selected() {
-        if let Some(task) = tasks.tasks.get_mut(i) {
-            task.bullet = bullet;
-        }
-    }
 }
 
 fn parse_input(text: &str) -> (String, Vec<String>) {
@@ -221,32 +309,37 @@ fn draw(f: &mut Frame, tasks: &TaskList, list_state: &mut ListState, mode: &Inpu
         .constraints([Constraint::Min(3), Constraint::Length(3)])
         .split(f.area());
 
-    let items: Vec<ListItem> = tasks
-        .list_tasks()
-        .iter()
-        .map(|t| {
-            let is_done = t.bullet == BulletKind::Done;
-            let style = if is_done {
-                Style::default().fg(Color::DarkGray).add_modifier(Modifier::CROSSED_OUT)
-            } else {
-                Style::default().fg(Color::White)
-            };
-            let tags = if t.tags.is_empty() {
-                String::new()
-            } else {
-                format!(" #{}", t.tags.join(" #"))
-            };
-            ListItem::new(Line::from(vec![
-                Span::styled(format!("{} ", t.bullet.symbol()), style),
-                Span::styled(format!("{}", t.id), Style::default().fg(Color::Cyan)),
-                Span::styled(" - ", style),
-                Span::styled(format!("{}{}", t.description, tags), style),
-            ]))
-        })
-        .collect();
+    let is_backlog = matches!(mode, InputMode::Backlog);
+    let display_tasks: Vec<&sm_core::Task> = if is_backlog {
+        tasks.list_backlog()
+    } else {
+        tasks.list_daily()
+    };
+
+    let items: Vec<ListItem> = display_tasks.iter().map(|t| {
+        let style = if t.bullet == BulletKind::Done || has_marker(&t.description, "[cancelled]") {
+            Style::default().fg(Color::DarkGray).add_modifier(Modifier::CROSSED_OUT)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        let tags = if t.tags.is_empty() {
+            String::new()
+        } else {
+            format!(" #{}", t.tags.join(" #"))
+        };
+        ListItem::new(Line::from(vec![
+            Span::styled(format!("{} ", t.bullet.symbol()), style),
+            Span::styled(format!("{}", t.id), Style::default().fg(Color::Cyan)),
+            Span::styled(" - ", style),
+            Span::styled(format!("{}{}", t.description, tags), style),
+        ]))
+    }).collect();
 
     let date = Local::now().format("%Y-%m-%d").to_string();
-    let title = format!(" {} | {} | {} ", project_name, date, tasks.list_tasks().len());
+    let daily_count = tasks.list_daily().len();
+    let backlog_count = tasks.list_backlog().len();
+    let view_label = if is_backlog { " BACKLOG " } else { " DAILY " };
+    let title = format!(" {} | {} | {} tasks | {} backlog {} ", project_name, date, daily_count, backlog_count, view_label);
     let list = List::new(items)
         .block(Block::default().borders(Borders::ALL).title(title))
         .highlight_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
@@ -272,8 +365,14 @@ fn draw(f: &mut Frame, tasks: &TaskList, list_state: &mut ListState, mode: &Inpu
                 Span::styled("dd  ", Style::default().fg(Color::DarkGray)),
                 Span::styled("t", Style::default().fg(Color::Green)),
                 Span::styled("oggle  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("c", Style::default().fg(Color::Red)),
+                Span::styled("ancel  ", Style::default().fg(Color::DarkGray)),
                 Span::styled("b", Style::default().fg(Color::Cyan)),
                 Span::styled("ullet  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("B", Style::default().fg(Color::Yellow)),
+                Span::styled("acklog  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("N", Style::default().fg(Color::Green)),
+                Span::styled("otes  ", Style::default().fg(Color::DarkGray)),
                 Span::styled("d", Style::default().fg(Color::Red)),
                 Span::styled("el  ", Style::default().fg(Color::DarkGray)),
                 Span::styled("q", Style::default().fg(Color::Red)),
@@ -284,13 +383,13 @@ fn draw(f: &mut Frame, tasks: &TaskList, list_state: &mut ListState, mode: &Inpu
             .block(Block::default().borders(Borders::ALL).title(" Command "));
             f.render_widget(help, chunks[1]);
 
-            let area = centered_rect(36, 38, f.area());
+            let area = centered_rect(40, 50, f.area());
             f.render_widget(Clear, area);
 
             let items = vec![
                 ListItem::new(Line::from(vec![
                     Span::styled("  a  ", Style::default().fg(Color::Green)),
-                    Span::styled("Add task", Style::default().fg(Color::White)),
+                    Span::styled("Add task (backlog)", Style::default().fg(Color::White)),
                 ])),
                 ListItem::new(Line::from(vec![
                     Span::styled("  d  ", Style::default().fg(Color::Red)),
@@ -299,14 +398,30 @@ fn draw(f: &mut Frame, tasks: &TaskList, list_state: &mut ListState, mode: &Inpu
                 ListItem::new(Line::from(vec![
                     Span::styled("  t  ", Style::default().fg(Color::Yellow)),
                     Span::styled("Toggle (", Style::default().fg(Color::White)),
-                    Span::styled("•", Style::default().fg(Color::Yellow)),
+                    Span::styled("\u{2022}", Style::default().fg(Color::Yellow)),
                     Span::styled("/", Style::default().fg(Color::White)),
                     Span::styled("x", Style::default().fg(Color::Yellow)),
                     Span::styled(")", Style::default().fg(Color::White)),
                 ])),
                 ListItem::new(Line::from(vec![
+                    Span::styled("  c  ", Style::default().fg(Color::Red)),
+                    Span::styled("Cancel (", Style::default().fg(Color::White)),
+                    Span::styled("[cancelled]", Style::default().fg(Color::Red)),
+                    Span::styled(")", Style::default().fg(Color::White)),
+                ])),
+                ListItem::new(Line::from(vec![
                     Span::styled("  b  ", Style::default().fg(Color::Cyan)),
                     Span::styled("Bullet journal...", Style::default().fg(Color::White)),
+                ])),
+                ListItem::new(Line::from(vec![
+                    Span::styled("  B  ", Style::default().fg(Color::Yellow)),
+                    Span::styled("Backlog view (", Style::default().fg(Color::White)),
+                    Span::styled("Enter", Style::default().fg(Color::Green)),
+                    Span::styled(" pulls to daily)", Style::default().fg(Color::White)),
+                ])),
+                ListItem::new(Line::from(vec![
+                    Span::styled("  N  ", Style::default().fg(Color::Green)),
+                    Span::styled("Notes of the day", Style::default().fg(Color::White)),
                 ])),
                 ListItem::new(Line::from(vec![
                     Span::styled("  q  ", Style::default().fg(Color::Red)),
@@ -383,18 +498,36 @@ fn draw(f: &mut Frame, tasks: &TaskList, list_state: &mut ListState, mode: &Inpu
         InputMode::Adding { input, cursor } => {
             let display = if *cursor < input.len() {
                 let mut s = input.clone();
-                s.insert(*cursor, '█');
+                s.insert(*cursor, '\u{2588}');
                 s
             } else {
-                format!("{}█", input)
+                format!("{}\u{2588}", input)
             };
             let input_widget = Paragraph::new(Line::from(vec![
                 Span::styled("Task: ", Style::default().fg(Color::Green)),
                 Span::styled(display, Style::default().fg(Color::White)),
-                Span::styled("  #tag1 #tag2", Style::default().fg(Color::DarkGray)),
+                Span::styled("  #tag1 #tag2 (goes to backlog)", Style::default().fg(Color::DarkGray)),
             ]))
             .block(Block::default().borders(Borders::ALL).title(" Add Task (Esc cancel) "));
             f.render_widget(input_widget, chunks[1]);
+        }
+        InputMode::Backlog => {
+            let help = Paragraph::new(Line::from(vec![
+                Span::styled("backlog: ", Style::default().fg(Color::Yellow)),
+                Span::styled("Enter", Style::default().fg(Color::Green)),
+                Span::styled(" pull to daily  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("Esc", Style::default().fg(Color::Gray)),
+                Span::styled(" back  ", Style::default().fg(Color::DarkGray)),
+                Span::styled("q", Style::default().fg(Color::Red)),
+                Span::styled(" uit", Style::default().fg(Color::DarkGray)),
+            ]))
+            .block(Block::default().borders(Borders::ALL).title(" Backlog "));
+            f.render_widget(help, chunks[1]);
+        }
+        InputMode::Notes { content } => {
+            let notes_widget = Paragraph::new(content.as_str())
+                .block(Block::default().borders(Borders::ALL).title(" Notes (Esc/N to close) "));
+            f.render_widget(notes_widget, chunks[1]);
         }
     }
 }

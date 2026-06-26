@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use fundacao::Vault;
-use sm_core::{BulletKind, Pomodoro, TaskList};
+use sm_core::{has_marker, BulletKind, Pomodoro, TaskList, MARKER_BACKLOG};
 
 #[derive(Parser)]
 #[command(name = "sm", about = "Smart Task Manager")]
@@ -14,13 +14,16 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Command {
-    #[command(about = "Add a new task")]
+    #[command(about = "Add a new task (goes to backlog by default)")]
     Add {
         #[arg(long)]
         task: String,
 
         #[arg(long, help = "Comma-separated tags")]
         tags: Option<String>,
+
+        #[arg(long, help = "Add directly to today (with [todo]) instead of backlog")]
+        today: bool,
     },
 
     #[command(about = "Remove a task by ID")]
@@ -35,7 +38,7 @@ pub enum Command {
         id: u64,
     },
 
-    #[command(about = "List all tasks")]
+    #[command(about = "List daily tasks (without [backlog])")]
     List,
 
     #[command(about = "Set task bullet type (ex: done, migrated, scheduled, event, note, priority)")]
@@ -45,6 +48,24 @@ pub enum Command {
 
         #[arg(long, help = "Bullet type: task, done, migrated, scheduled, event, note, priority")]
         r#type: String,
+    },
+
+    #[command(about = "List backlog tasks")]
+    Backlog,
+
+    #[command(about = "Pull task(s) from backlog to daily")]
+    Pull {
+        #[arg(long, help = "Task ID to pull")]
+        id: Option<u64>,
+
+        #[arg(long, help = "Pull all backlog tasks")]
+        all: bool,
+    },
+
+    #[command(about = "Mark a task as cancelled")]
+    Cancel {
+        #[arg(long)]
+        id: u64,
     },
 
     #[command(about = "Pomodoro timer commands", subcommand)]
@@ -72,9 +93,18 @@ pub enum PomoCommand {
     },
 }
 
+fn print_task(task: &sm_core::Task) {
+    let tags = if task.tags.is_empty() {
+        String::new()
+    } else {
+        format!(" #{}", task.tags.join(" #"))
+    };
+    println!("{} {} - {}{}", task.bullet.symbol(), task.id, task.description, tags);
+}
+
 pub fn handle_command(command: Command, tasks: &mut TaskList) {
     match command {
-        Command::Add { task, tags } => {
+        Command::Add { task, tags, today } => {
             let tag_list = tags
                 .as_deref()
                 .unwrap_or("")
@@ -82,8 +112,13 @@ pub fn handle_command(command: Command, tasks: &mut TaskList) {
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .collect();
-            let t = tasks.add_task(task, tag_list);
-            println!("{} {} added: {}", t.bullet.symbol(), t.id, t.description);
+            let t = if today {
+                tasks.add_today(task, tag_list)
+            } else {
+                tasks.add_backlog(task, tag_list)
+            };
+            let label = if has_marker(&t.description, MARKER_BACKLOG) { "backlog" } else { "today" };
+            println!("✓ Task #{} added to {}: {}", t.id, label, t.description);
         }
         Command::Remove { id } => match tasks.remove_task(id) {
             Some(t) => println!("✓ Task #{} removed: {}", t.id, t.description),
@@ -97,17 +132,13 @@ pub fn handle_command(command: Command, tasks: &mut TaskList) {
             None => eprintln!("✗ Task #{} not found", id),
         },
         Command::List => {
-            if tasks.list_tasks().is_empty() {
-                println!("No tasks yet.");
+            let daily = tasks.list_daily();
+            if daily.is_empty() {
+                println!("No daily tasks. Use 'sm backlog' to see backlog.");
                 return;
             }
-            for task in tasks.list_tasks() {
-                let tags = if task.tags.is_empty() {
-                    String::new()
-                } else {
-                    format!(" #{}", task.tags.join(" #"))
-                };
-                println!("{} {} - {}{}", task.bullet.symbol(), task.id, task.description, tags);
+            for task in &daily {
+                print_task(task);
             }
         }
         Command::Bullet { id, r#type } => {
@@ -123,6 +154,34 @@ pub fn handle_command(command: Command, tasks: &mut TaskList) {
                 None => eprintln!("✗ Task #{} not found", id),
             }
         }
+        Command::Backlog => {
+            let backlog = tasks.list_backlog();
+            if backlog.is_empty() {
+                println!("No backlog tasks. Use 'sm add \"task\"' to add one.");
+                return;
+            }
+            for task in &backlog {
+                print_task(task);
+            }
+        }
+        Command::Pull { id, all } => {
+            if all {
+                let count = tasks.list_backlog().len();
+                tasks.pull_all();
+                println!("✓ Pulled {} task(s) from backlog to daily.", count);
+            } else if let Some(id) = id {
+                match tasks.pull_task(id) {
+                    Some(t) => println!("✓ Task #{} pulled to daily: {}", t.id, t.description),
+                    None => eprintln!("✗ Task #{} not found or not in backlog.", id),
+                }
+            } else {
+                eprintln!("Use --id <id> or --all to pull tasks.");
+            }
+        }
+        Command::Cancel { id } => match tasks.mark_cancelled(id) {
+            Some(t) => println!("✓ Task #{} cancelled: {}", t.id, t.description),
+            None => eprintln!("✗ Task #{} not found.", id),
+        },
         Command::Pomo(_) => unreachable!(),
     }
 }

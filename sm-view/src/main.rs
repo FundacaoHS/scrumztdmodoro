@@ -15,7 +15,21 @@ fn init() -> (TaskList, Vault, Config) {
         cfg.vault = fundacao::default_vault_path();
     }
     let vault = Vault::new(&cfg.vault);
-    let tasks = TaskList::load_from_vault(&vault).unwrap_or_default();
+    let today_path = vault.today_todo();
+
+    let tasks = if !today_path.exists() {
+        let mut today_tasks = TaskList::new();
+        if let Some(last_path) = vault.last_day_path() {
+            eprintln!("→ New day! Migrating unfinished tasks from {}...", last_path.file_stem().unwrap().to_string_lossy());
+            if let Err(e) = today_tasks.migrate_untouched(&last_path, &vault) {
+                eprintln!("  Migration error: {}", e);
+            }
+        }
+        today_tasks
+    } else {
+        TaskList::load_from_vault(&vault).unwrap_or_default()
+    };
+
     (tasks, vault, cfg)
 }
 
