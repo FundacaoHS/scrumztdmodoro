@@ -284,3 +284,9 @@ vim.api.nvim_create_user_command("SMTelescopeScan", function()
   local ext = tele()
   if ext then ext.scan() else sm.notify("Telescope not available", vim.log.levels.WARN) end
 end, {})
+
+-- Leader key: <leader>st → open SM tasks in Telescope
+vim.keymap.set("n", "<leader>st", function()
+  local ext = tele()
+  if ext then ext.tasks() else vim.cmd("SMTasks") end
+end, { desc = "SM: list tasks (Telescope)" })
