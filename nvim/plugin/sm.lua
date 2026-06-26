@@ -205,7 +205,7 @@ function SM_refresh_todo_highlights(buf)
   local ns = vim.api.nvim_create_namespace("sm_todo_virt")
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
   vim.fn.sign_unplace("sm_todo", { buffer = buf })
-  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1)
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   for lnum, line in ipairs(lines) do
     local marker
     for _, pat in ipairs(todo_patterns) do
