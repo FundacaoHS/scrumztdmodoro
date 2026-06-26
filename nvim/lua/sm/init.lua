@@ -2,9 +2,15 @@ local M = {}
 
 local sm_bin = vim.fn.getenv("SM_BIN")
 if sm_bin == vim.NIL then
-  -- procura no projeto atual
+  -- Deriva a raiz do projeto a partir do path deste arquivo
+  local plugin_root = debug.getinfo(1, "S").source
+    :gsub("^@", "")
+    :gsub("/lua/sm/init%.lua$", "")
+    :gsub("\\lua\\sm\\init%.lua$", "")
   local cwd = vim.fn.getcwd()
   local candidates = {
+    plugin_root .. "/target/debug/sm.exe",
+    plugin_root .. "/target/debug/sm",
     cwd .. "/target/debug/sm.exe",
     cwd .. "/target/debug/sm",
     cwd .. "/sm.exe",

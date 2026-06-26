@@ -1,7 +1,3 @@
-if vim.fn.executable("sm") == 0 and vim.fn.executable("target/debug/sm.exe") == 0 then
-  return
-end
-
 local sm = require("sm")
 
 -- List tasks in a scratch buffer
