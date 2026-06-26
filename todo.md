@@ -67,17 +67,17 @@ updated: 2026-06-25
 - [x] Integrar timer view na TUI
 - [x] Escrever testes
 
-## Feature: Backlog + Migração Automática + Notas
-- [ ] vault.rs: notes_dir, notes_file, last_day_path
-- [ ] task.rs: helpers de marcador [backlog]/[todo]/[cancelled]
-- [ ] task.rs: add_backlog, add_today, list_daily, list_backlog
-- [ ] task.rs: pull_task, pull_all, mark_cancelled
-- [ ] task.rs: migrate_untouched — tasks inacabadas → [todo] no hoje + notas → notes/
-- [ ] Testes de backlog e migrate
-- [ ] cli.rs: Backlog, Pull, Cancel, Add --today
-- [ ] main.rs: trigger migração automática no init()
-- [ ] tui.rs: backlog view (tecla B), notes view (N), cancelar (c)
-- [ ] tui.rs: título mostra daily/backlog count
+## Feature: Backlog + Migração Automática + Notas (concluída)
+- [x] vault.rs: notes_dir, notes_file, last_day_path
+- [x] task.rs: helpers de marcador [backlog]/[todo]/[cancelled]
+- [x] task.rs: add_backlog, add_today, list_daily, list_backlog
+- [x] task.rs: pull_task, pull_all, mark_cancelled
+- [x] task.rs: migrate_untouched — tasks inacabadas → [todo] no hoje + notas → notes/
+- [x] Testes de backlog e migrate
+- [x] cli.rs: Backlog, Pull, Cancel, Add --today
+- [x] main.rs: trigger migração automática no init()
+- [x] tui.rs: backlog view (tecla B), notes view (N), cancelar (c)
+- [x] tui.rs: título mostra daily/backlog count
 
 ## Feature: sm-tauri — GUI Desktop (concluída)
 - [x] Criar crate `sm-tauri` como workspace member
@@ -88,17 +88,17 @@ updated: 2026-06-25
 - [x] Criar `index.html` com frontend básico JS
 - [x] Compilar com sucesso
 
-## Feature: Neovim Plugin
-- [ ] Plugin Lua que invoca `sm` CLI para integrar Bullet Journal + Pomodoro no Neovim
-- [ ] Comando `:SMTasks` — lista tasks do dia num buffer
-- [ ] Comando `:SMAdd "desc" #tag` — adiciona task
-- [ ] Comando `:SMToggle` / `:SMDelete` sob cursor
-- [ ] Comando `:SMPomo start|stop|status` — timer Pomodoro no statusline
-- [ ] Highlight de bullets (cores diferentes por tipo)
-- [ ] Atualização automática ao salvar buffer
-- [ ] **Scanner de TODOs com fzf**: buscar `- [ ]`, `TODO:`, `FIXME:`, `HACK:`, `XXX:` nos arquivos do projeto via `rg` + `fzf` para seleção interativa
-- [ ] Pular para a linha do arquivo ao selecionar um TODO escaneado
-- [ ] Opção de importar um TODO escaneado como task do Bullet Journal (`:SMImport`)
+## Feature: Neovim Plugin (sm.nvim)
+- [x] Estruturar como plugin standalone (`sm.nvim`) com `lua/sm/init.lua`
+- [x] Plugin Lua que invoca `sm` CLI para integrar Bullet Journal + Pomodoro no Neovim
+- [x] Comando `:SMTasks` — lista tasks do dia num buffer com teclas `<CR>` toggle, `dd` delete, `cc` cancel
+- [x] Comando `:SMBacklog` — backlog buffer, `<CR>` pull pro daily
+- [x] Comando `:SMAdd` — adiciona task (com `!` vai pra daily, sem vai pra backlog)
+- [x] Comando `:SMPomo start|stop|status` — Pomodoro com notificações noice
+- [x] Highlight de bullets + concealing de marcadores (`[backlog]` → `B`, `[todo]` → `T`, `[cancelled]` → `X`)
+- [x] Integração com noice.nvim (fallback pra `vim.notify`)
+- [x] **Scanner de TODOs**: `:SMScan` — `rg` + quickfix list, mostra TODOs/FIXMEs/HACKs do projeto
+- [x] Atualização automática ao usar teclas nos buffers
+- [ ] Timer Pomodoro no statusline
+- [ ] Opção de importar TODO escaneado como task do Bullet Journal (`:SMImport`)
 - [ ] Adicionar highlight customizado para TODOs nos buffers (signcolumn + virtual text)
-- [ ] Estruturar como plugin standalone (`sm.nvim`) com `lua/sm/init.lua`
-- [ ] Usar `vim.system()` ou `jobstart` para chamar `sm` CLI assincronamente
