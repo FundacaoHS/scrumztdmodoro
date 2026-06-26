@@ -262,28 +262,25 @@ end, { nargs = 1, complete = "customlist,v:lua.sm_pomo_complete" })
 vim.api.nvim_create_user_command("SMScan", function() SM_scan() end, {})
 vim.api.nvim_create_user_command("SMImport", function() SM_import() end, {})
 
--- Telescope commands (require telescope extension)
+-- Telescope commands (loads sm.telescope submodule)
+local function tele()
+  local ok, ext = pcall(require, "sm.telescope")
+  return ok and ext or nil
+end
+
 vim.api.nvim_create_user_command("SMTelescope", function()
-  pcall(function()
-    require("telescope").load_extension("sm")
-    require("telescope").extensions.sm.menu()
-  end)
+  local ext = tele()
+  if ext then ext.menu() else sm.notify("Telescope not available", vim.log.levels.WARN) end
 end, {})
 vim.api.nvim_create_user_command("SMTelescopeTasks", function()
-  pcall(function()
-    require("telescope").load_extension("sm")
-    require("telescope").extensions.sm.tasks()
-  end)
+  local ext = tele()
+  if ext then ext.tasks() else sm.notify("Telescope not available", vim.log.levels.WARN) end
 end, {})
 vim.api.nvim_create_user_command("SMTelescopeBacklog", function()
-  pcall(function()
-    require("telescope").load_extension("sm")
-    require("telescope").extensions.sm.backlog()
-  end)
+  local ext = tele()
+  if ext then ext.backlog() else sm.notify("Telescope not available", vim.log.levels.WARN) end
 end, {})
 vim.api.nvim_create_user_command("SMTelescopeScan", function()
-  pcall(function()
-    require("telescope").load_extension("sm")
-    require("telescope").extensions.sm.scan()
-  end)
+  local ext = tele()
+  if ext then ext.scan() else sm.notify("Telescope not available", vim.log.levels.WARN) end
 end, {})
