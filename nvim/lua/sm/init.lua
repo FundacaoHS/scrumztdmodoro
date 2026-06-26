@@ -114,18 +114,18 @@ end
 function M.pomo_statusline()
   local res = M.run_sync("pomo status")
   local cleaned = vim.trim(res or "")
-  if cleaned == "" or cleaned:match("Idle") then
+  if cleaned == "" or cleaned:match("No active") then
     return ""
   end
-  if cleaned:match("Focusing") then
-    local time = cleaned:match("%[(%d+:%d+)%]") or ""
+  local time = cleaned:match("(%d+:%d+)")
+  if not time then return "" end
+  if cleaned:match("Focus") then
     return "▸ " .. time
   end
-  if cleaned:match("Short Break") or cleaned:match("Long Break") then
-    local time = cleaned:match("%[(%d+:%d+)%]") or ""
+  if cleaned:match("Break") then
     return "◷ " .. time
   end
-  return cleaned
+  return time
 end
 
 return M
