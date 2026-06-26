@@ -67,6 +67,18 @@ updated: 2026-06-25
 - [x] Integrar timer view na TUI
 - [x] Escrever testes
 
+## Feature: Backlog + Migração Automática + Notas
+- [ ] vault.rs: notes_dir, notes_file, last_day_path
+- [ ] task.rs: helpers de marcador [backlog]/[todo]/[cancelled]
+- [ ] task.rs: add_backlog, add_today, list_daily, list_backlog
+- [ ] task.rs: pull_task, pull_all, mark_cancelled
+- [ ] task.rs: migrate_untouched — tasks inacabadas → [todo] no hoje + notas → notes/
+- [ ] Testes de backlog e migrate
+- [ ] cli.rs: Backlog, Pull, Cancel, Add --today
+- [ ] main.rs: trigger migração automática no init()
+- [ ] tui.rs: backlog view (tecla B), notes view (N), cancelar (c)
+- [ ] tui.rs: título mostra daily/backlog count
+
 ## Feature: sm-tauri — GUI Desktop (concluída)
 - [x] Criar crate `sm-tauri` como workspace member
 - [x] Adicionar dependências: `tauri`, `sm-core`, `fundacao`
