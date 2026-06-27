@@ -285,4 +285,14 @@ end, {})
 vim.keymap.set("n", "<leader>st", function()
   local ext = tele()
   if ext then ext.tasks() else vim.cmd("SMTasks") end
-end, { desc = "SM: list tasks (Telescope)" })
+end, { desc = "SM Tasks" })
+
+-- Register with which-key if available
+pcall(function()
+  local wk = require("which-key")
+  if wk.add then
+    wk.add({ { "<leader>st", desc = "SM Tasks" } })
+  elseif wk.register then
+    wk.register({ ["<leader>"] = { s = { t = { name = "SM Tasks" } } } })
+  end
+end)
